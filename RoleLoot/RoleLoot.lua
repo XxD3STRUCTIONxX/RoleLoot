@@ -1243,6 +1243,12 @@ local function OnTooltip(tip)
     if text then
         tip:AddLine("|T" .. MARK_ICON[verdict] .. ":16|t RoleLoot: " .. text)
         TintTooltip(tip, MARK_COLOR[verdict])
+        -- The verdict as a header, right of the item name (not on ItemRefTooltip: its close button is there).
+        local header = tip == GameTooltip and _G["GameTooltipTextRight1"]
+        if header then
+            header:SetText(COLOR[verdict] .. verdict .. "|r")
+            header:Show()
+        end
         tip:Show() -- (fits the new line)
     end
 end

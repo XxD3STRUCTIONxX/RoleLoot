@@ -186,6 +186,7 @@ local function Tooltip(name)
     end
     function tip:GetItem() return "name", self.link end
     function tip:SetBackdropBorderColor(r, g, b) self.border = { r, g, b } end
+    New("FontString", name .. "TextRight1")
     return tip
 end
 GameTooltip, ItemRefTooltip = Tooltip("GameTooltip"), Tooltip("ItemRefTooltip")
@@ -328,6 +329,7 @@ Expect(1003, "GREED", "Not an upgrade")
 Expect(1004, "PASS", "can't wear this armor")
 check(GameTooltip.border[1] == 1 and GameTooltip.border[2] == 0.25 and Tip(1004):find("Pass-Up", 1, true),
     "PASS tooltip: red border and the cross icon")
+check(GameTooltipTextRight1.shown and GameTooltipTextRight1.text:find("PASS", 1, true), "PASS header beside the item name")
 for _, f in ipairs(GameTooltip.hooks.OnTooltipCleared) do f(GameTooltip) end
 check(GameTooltip.border[2] == 1, "cleared tooltip: border back to normal")
 Expect(1005, "GREED", "Not your best armor type")
