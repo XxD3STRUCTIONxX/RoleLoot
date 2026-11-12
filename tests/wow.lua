@@ -331,7 +331,10 @@ check(GameTooltip.border[1] == 1 and GameTooltip.border[2] == 0.25 and Tip(1004)
     "PASS tooltip: red border and the cross icon")
 check(GameTooltipTextRight1.shown and GameTooltipTextRight1.text:find("PASS", 1, true), "PASS header beside the item name")
 for _, f in ipairs(GameTooltip.hooks.OnTooltipCleared) do f(GameTooltip) end
-check(GameTooltip.border[2] == 1, "cleared tooltip: border back to normal")
+check(GameTooltip.border[2] == 1 and not GameTooltip.roleLootOutline.shown, "cleared tooltip: border back to normal")
+Tip(1004)
+check(GameTooltip.roleLootOutline.shown and GameTooltip.roleLootOutline.sides[1].SetColorTextureArgs[2] == 0.25,
+    "PASS tooltip: thick red outline")
 Expect(1005, "GREED", "Not your best armor type")
 Expect(1006, "GREED", "You fight with a two-hander")
 Click(settings.roleButtons[2]) -- 1H melee

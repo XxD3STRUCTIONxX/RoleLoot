@@ -1232,6 +1232,27 @@ local function TintTooltip(tip, c)
     if tip.NineSlice and tip.NineSlice.SetBorderColor then tip.NineSlice:SetBorderColor(r, g, b)
     elseif tip.SetBackdropBorderColor then tip:SetBackdropBorderColor(r, g, b) end
     tip.roleLootTint = c
+    -- The game's border is thin: a solid 3px line around the tooltip on top of it.
+    local outline = tip.roleLootOutline
+    if not outline and c then
+        outline = CreateFrame("Frame", nil, tip)
+        outline:SetPoint("TOPLEFT", -1, 1)
+        outline:SetPoint("BOTTOMRIGHT", 1, -1)
+        outline.sides = {}
+        for i, p in ipairs({ { "TOPLEFT", "TOPRIGHT" }, { "BOTTOMLEFT", "BOTTOMRIGHT" },
+                             { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
+            local t = outline:CreateTexture(nil, "OVERLAY")
+            t:SetPoint(p[1])
+            t:SetPoint(p[2])
+            if i <= 2 then t:SetHeight(3) else t:SetWidth(3) end
+            outline.sides[i] = t
+        end
+        tip.roleLootOutline = outline
+    end
+    if outline then
+        for _, t in ipairs(outline.sides) do t:SetColorTexture(r, g, b, 0.9) end
+        outline:SetShown(c ~= nil)
+    end
 end
 
 local function OnTooltip(tip)
