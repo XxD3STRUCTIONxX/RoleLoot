@@ -294,6 +294,9 @@ local function Labels(buttons)
 end
 check(Labels(settings.dungeonButtons) == "DPS,Tank,Healer", "dungeon labels: " .. Labels(settings.dungeonButtons))
 check(Labels(settings.roleButtons) == "2H melee,1H melee,Bow,Any ranged,Caster", "styles: " .. Labels(settings.roleButtons))
+for _, b in ipairs(settings.roleButtons) do
+    check(b.width >= 100 and b.SetPointArgs[2] + b.width <= settings.width - 10, b.text .. " button fits in the window")
+end
 check(settings.dungeonButtons[2].textures and settings.dungeonButtons[2].textures[1].texture
     == "Interface\\LFGFrame\\UI-LFG-ICON-ROLES", "Tank button has the role icon")
 check(settings.roleButtons[1].textures[1].texture == "Interface\\Icons\\INV_Axe_04", "2H melee button has an icon")

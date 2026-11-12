@@ -364,6 +364,7 @@ local function Button(parent, text, width, x, y, onClick, role)
         if label then
             label:ClearAllPoints()
             label:SetPoint("LEFT", icon, "RIGHT", 3, 0)
+            label:SetPoint("RIGHT", -6, 0) -- (cut off, never past the button)
         end
     end
     return b
@@ -472,7 +473,7 @@ end
 
 local function OpenSettings()
     if frame then Toggle(frame) Refresh() return end
-    local f = NewWindow("RoleLootFrame", "RoleLoot", 400, 270)
+    local f = NewWindow("RoleLootFrame", "RoleLoot", 544, 270) -- (5 style buttons, 100 wide)
     Toggle(f)
     frame = f
     local who = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -494,7 +495,7 @@ local function OpenSettings()
     role:SetText("Fighting style (questing, and dungeons as DPS; off-meta welcome):")
     f.roleButtons = {}
     for i, r in ipairs(STYLES) do
-        local b = Button(f, STYLE_LABEL[r], 72, 14 + (i - 1) * 75, -126, function() db.role = r end, r)
+        local b = Button(f, STYLE_LABEL[r], 100, 14 + (i - 1) * 104, -126, function() db.role = r end, r)
         b.role = r
         f.roleButtons[i] = b
     end
@@ -505,13 +506,13 @@ local function OpenSettings()
     f.dungeonButtons = {}
     for i, r in ipairs(DUNGEON_ROLES) do
         local saved = r ~= "dps" and r or nil
-        local b = Button(f, ROLE_LABEL[r], 88, 14 + (i - 1) * 92, -176, function() db.dungeonRole = saved end, r)
+        local b = Button(f, ROLE_LABEL[r], 100, 14 + (i - 1) * 104, -176, function() db.dungeonRole = saved end, r)
         b.role = saved
         f.dungeonButtons[i] = b
     end
 
-    Button(f, "BiS list", 90, 296, -208, function() OpenBis() end)
-    Button(f, "Bug / feedback", 110, 276, -236, function() OpenBug() end)
+    Button(f, "BiS list", 110, 420, -208, function() OpenBis() end)
+    Button(f, "Bug / feedback", 110, 420, -236, function() OpenBug() end)
     local hint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     hint:SetPoint("TOPLEFT", 14, -214)
     hint:SetWidth(270)
