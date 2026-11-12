@@ -1,0 +1,36 @@
+name: Bug report
+description: Something in RoleLoot is wrong or broken
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: The item, window or message that looks wrong. Screenshots help a lot.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen
+      placeholder: "1. Open /rl bis  2. ..."
+  - type: input
+    id: setup
+    attributes:
+      label: Your setup
+      description: In game, type /rl bug and copy the second line.
+      placeholder: RoleLoot 0.8.0, client 1.16.0 (...), Human Paladin level 30, Retribution, role Melee, dungeons same
+    validations:
+      required: true
+  - type: textarea
+    id: errors
+    attributes:
+      label: Lua errors (if any)
+      description: Text from the error popup or BugSack.
+      render: text

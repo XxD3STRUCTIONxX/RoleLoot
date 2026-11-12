@@ -1,0 +1,15 @@
+name: Feedback or idea
+description: Suggest a feature or tell us what could be better
+labels: [feedback]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea or feedback
+    validations:
+      required: true
+  - type: input
+    id: setup
+    attributes:
+      label: Your class, spec and role (optional)
+      description: In game, type /rl bug and copy the second line.

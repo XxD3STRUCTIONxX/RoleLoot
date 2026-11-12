@@ -1,0 +1,13 @@
+## Interface: 16001
+## Title: RoleLoot
+## Notes: Need / Greed / Pass advice and a BiS list for your class, spec, role and race. /rl to set up, /rl bis for the list, /rl search for every item.
+## Author: XxD3STRUCTIONxX
+## Version: 0.8.1
+## X-License: All Rights Reserved (item sources: wow-classic-items, MIT)
+## SavedVariables: RoleLootLearned
+## SavedVariablesPerCharacter: RoleLootDB
+## IconTexture: Interface\Icons\INV_Misc_Bag_08
+## AddonCompartmentFunc: RoleLoot_OnAddonCompartmentClick
+
+Data.lua
+RoleLoot.lua
