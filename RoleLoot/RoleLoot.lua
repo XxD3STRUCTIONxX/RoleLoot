@@ -320,7 +320,7 @@ local function VerdictText(link)
     local verdict, reason = Verdict(link)
     if verdict then
         return COLOR[verdict] .. verdict .. "|r |cffaaaaaa" .. reason .. " (" .. SpecName() .. ", "
-            .. ROLE_LABEL[ActiveRole()] .. ")|r"
+            .. ROLE_LABEL[ActiveRole()] .. ")|r", verdict
     end
 end
 
@@ -1223,16 +1223,31 @@ end
 
 ---------------------------------------------------------------- tooltips and loot rolls
 
+-- Colors `tip`'s border by the verdict (`c`; nil: back to the game's).
+local function TintTooltip(tip, c)
+    local r, g, b = 1, 1, 1
+    if c then r, g, b = c[1], c[2], c[3] elseif TOOLTIP_DEFAULT_COLOR then
+        r, g, b = TOOLTIP_DEFAULT_COLOR.r, TOOLTIP_DEFAULT_COLOR.g, TOOLTIP_DEFAULT_COLOR.b
+    end
+    if tip.NineSlice and tip.NineSlice.SetBorderColor then tip.NineSlice:SetBorderColor(r, g, b)
+    elseif tip.SetBackdropBorderColor then tip:SetBackdropBorderColor(r, g, b) end
+    tip.roleLootTint = c
+end
+
 local function OnTooltip(tip)
     if tip ~= GameTooltip and tip ~= ItemRefTooltip then return end
     local link
     if TooltipUtil and TooltipUtil.GetDisplayedItem then link = select(2, TooltipUtil.GetDisplayedItem(tip)) end
     if not link and tip.GetItem then link = select(2, tip:GetItem()) end
-    local text = VerdictText(link)
+    local text, verdict = VerdictText(link)
     if text then
-        tip:AddLine("RoleLoot: " .. text)
+        tip:AddLine("|T" .. MARK_ICON[verdict] .. ":16|t RoleLoot: " .. text)
+        TintTooltip(tip, MARK_COLOR[verdict])
         tip:Show() -- (fits the new line)
     end
+end
+for _, tip in ipairs({ GameTooltip, ItemRefTooltip }) do
+    if tip then tip:HookScript("OnTooltipCleared", function(t) TintTooltip(t) end) end
 end
 
 if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then

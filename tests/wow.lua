@@ -185,6 +185,7 @@ local function Tooltip(name)
         for _, f in ipairs(self.hooks.OnTooltipSetItem or {}) do f(self) end
     end
     function tip:GetItem() return "name", self.link end
+    function tip:SetBackdropBorderColor(r, g, b) self.border = { r, g, b } end
     return tip
 end
 GameTooltip, ItemRefTooltip = Tooltip("GameTooltip"), Tooltip("ItemRefTooltip")
@@ -325,6 +326,10 @@ Expect(1001, "PASS", "Healer gear, you play Melee")
 Expect(1002, "NEED", "Upgrade +")
 Expect(1003, "GREED", "Not an upgrade")
 Expect(1004, "PASS", "can't wear this armor")
+check(GameTooltip.border[1] == 1 and GameTooltip.border[2] == 0.25 and Tip(1004):find("Pass-Up", 1, true),
+    "PASS tooltip: red border and the cross icon")
+for _, f in ipairs(GameTooltip.hooks.OnTooltipCleared) do f(GameTooltip) end
+check(GameTooltip.border[2] == 1, "cleared tooltip: border back to normal")
 Expect(1005, "GREED", "Not your best armor type")
 Expect(1006, "GREED", "You fight with a two-hander")
 Click(settings.roleButtons[2]) -- 1H melee
