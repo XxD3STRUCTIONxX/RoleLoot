@@ -31,6 +31,8 @@ function Widget:SetWidth(w) self.width = w end
 function Widget:SetHeight(h) self.height = h end
 function Widget:GetWidth() return self.width end
 function Widget:GetHeight() return self.height end
+function Widget:GetRight() return 600 end
+function Widget:GetTop() return 700 end
 function Widget:SetText(t) self.text = t end
 function Widget:GetText() return self.text end
 function Widget:SetTexture(t) self.texture = t end
@@ -277,28 +279,29 @@ ns.SOURCES[1011][4] = "Horde"
 
 ---------------------------------------------------------------- scenarios
 
--- First login, a 0.3.0 save with a "ranged" dungeon role and no spec: settings open.
-RoleLootDB = { dungeonRole = "ranged" }
+-- First login, a 0.8 save with the Healer role and no spec: settings open.
+RoleLootDB = { role = "healer" }
 RoleLootLearned = { [1018] = { "Some Boss", "Some Dungeon", 0 } }
 Fire("PLAYER_LOGIN")
 local settings = RoleLootFrame
 check(settings and settings.shown, "settings open on first login")
-check(RoleLootDB.dungeonRole == "dps", "old dungeon role becomes DPS")
+check(RoleLootDB.role == "melee2h" and RoleLootDB.dungeonRole == "healer", "old Healer role: a style, healer in dungeons")
 check(ns.SOURCES[1018] and ns.SOURCES[1018][1] == "Some Boss", "items learned before are listed")
-check(#settings.dungeonButtons == 4, "dungeon row: Same, Tank, DPS, Healer")
-local labels = {}
-for _, b in ipairs(settings.dungeonButtons) do labels[#labels + 1] = b.text end
-check(table.concat(labels, ",") == "Same,Tank,DPS,Healer", "dungeon labels: " .. table.concat(labels, ","))
+local function Labels(buttons)
+    local labels = {}
+    for _, b in ipairs(buttons) do labels[#labels + 1] = b.text end
+    return table.concat(labels, ",")
+end
+check(Labels(settings.dungeonButtons) == "DPS,Tank,Healer", "dungeon labels: " .. Labels(settings.dungeonButtons))
+check(Labels(settings.roleButtons) == "2H melee,1H melee,Bow,Any ranged,Caster", "styles: " .. Labels(settings.roleButtons))
 check(settings.dungeonButtons[2].textures and settings.dungeonButtons[2].textures[1].texture
     == "Interface\\LFGFrame\\UI-LFG-ICON-ROLES", "Tank button has the role icon")
-check(settings.dungeonButtons[1].textures == nil, "Same button has no icon")
-check(settings.roleButtons[1].textures[1].texture == "Interface\\Icons\\INV_Sword_04", "Melee button has an icon")
+check(settings.roleButtons[1].textures[1].texture == "Interface\\Icons\\INV_Axe_04", "2H melee button has an icon")
 
 Click(settings.specButtons[3]) -- Retribution
-check(RoleLootDB.spec == 3 and RoleLootDB.role == "melee", "Retribution picks melee")
-check(settings.dungeonButtons[3].locked, "DPS highlighted")
-Click(settings.dungeonButtons[1]) -- Same
-check(RoleLootDB.dungeonRole == nil, "Same clears the dungeon role")
+check(RoleLootDB.spec == 3 and RoleLootDB.role == "melee2h" and RoleLootDB.dungeonRole == nil,
+    "Retribution picks 2H melee, DPS in dungeons")
+check(settings.dungeonButtons[1].locked, "DPS highlighted")
 
 local function Tip(id)
     GameTooltip:SetHyperlink(Link(id))
@@ -313,7 +316,11 @@ Expect(1002, "NEED", "Upgrade +")
 Expect(1003, "GREED", "Not an upgrade")
 Expect(1004, "PASS", "can't wear this armor")
 Expect(1005, "GREED", "Not your best armor type")
-Expect(1006, "GREED", "Retribution uses two-handers")
+Expect(1006, "GREED", "You fight with a two-hander")
+Click(settings.roleButtons[2]) -- 1H melee
+check(not Tip(1006):find("You fight", 1, true), "1H melee takes one-handers")
+Expect(1007, "GREED", "You fight one-handed")
+Click(settings.roleButtons[1]) -- back to 2H melee
 Expect(1007, "NEED", "racial weapon")
 Expect(1008, "PASS", "can't use this weapon")
 Expect(1011, "NEED", "slot empty")
@@ -331,22 +338,22 @@ Expect(1013, "PASS", "Tank gear")
 T.kind = "party"
 Expect(1013, "NEED", "(Retribution, Tank)")
 Expect(1001, "PASS", "you play Tank")
--- DPS for a paladin whose role is Healer: melee in dungeons, healer outside.
-Click(settings.roleButtons[5]) -- Healer
-Click(settings.dungeonButtons[3]) -- DPS
-Expect(1002, "NEED", "(Retribution, Melee)")
+-- Healer in dungeons, the fighting style outside.
+Click(settings.dungeonButtons[3]) -- Healer
 T.kind = "raid"
-Expect(1001, "PASS", "you play Melee")
-T.kind = "none"
 Expect(1001, "NEED", "(Retribution, Healer)")
-Click(settings.roleButtons[1]) -- back to Melee
-Click(settings.dungeonButtons[1])
+T.kind = "none"
+Expect(1001, "PASS", "you play Melee")
+Click(settings.roleButtons[5]) -- Caster
+Expect(1002, "(Retribution, Caster)", "")
+Click(settings.roleButtons[1])
+Click(settings.dungeonButtons[1]) -- DPS
+check(RoleLootDB.dungeonRole == nil, "DPS clears the dungeon role")
 
 -- Minimap tooltip and clicks.
-Click(settings.dungeonButtons[3])
 RoleLootMinimapButton.scripts.OnEnter()
-check(table.concat(GameTooltip.lines, "|"):find("In dungeons: DPS", 1, true), "minimap tooltip shows the dungeon role")
-Click(settings.dungeonButtons[1])
+local tip = table.concat(GameTooltip.lines, "|")
+check(tip:find("2H melee", 1, true) and tip:find("In dungeons: DPS", 1, true), "minimap tooltip: " .. tip)
 Click(RoleLootMinimapButton, "RightButton")
 check(not settings.shown, "right-click toggles settings")
 
@@ -440,7 +447,12 @@ check(#main == 3 and main[1] == 1016 and main[2] == 1007 and main[3] == 1009,
     "next upgrades: lowest level first, then best: " .. table.concat(main, ","))
 Click(ButtonOf(bis, "Settings"))
 check(settings.shown, "BiS Settings button opens settings")
-check(settings.SetPointArgs[2] == bis, "settings open beside the BiS list, not on it")
+check(settings.SetPointArgs[2] == UIParent and settings.SetPointArgs[4] == 604,
+    "settings open beside the BiS list (a screen position: never anchored to it)")
+-- Double-clicking: windows reopening beside each other never anchor to each other.
+Click(ButtonOf(bis, "Settings")) Click(ButtonOf(bis, "Settings"))
+SlashCmdList.ROLELOOT("bis") SlashCmdList.ROLELOOT("bis")
+check(bis.SetPointArgs[2] ~= settings and settings.SetPointArgs[2] ~= bis, "no window anchored to another")
 
 -- Search window.
 Click(ButtonOf(bis, "Search"))

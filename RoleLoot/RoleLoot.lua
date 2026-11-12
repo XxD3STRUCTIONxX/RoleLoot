@@ -5,28 +5,35 @@ local _, ns = ...
 
 ---------------------------------------------------------------- data
 
--- Specs per class, in talent-tab order, with the role each one plays by default.
+-- Specs per class, in talent-tab order, with the fighting style each one
+-- levels with and its role in dungeons (nil: damage).
 local SPECS = {
-    WARRIOR = { { "Arms", "melee" }, { "Fury", "melee" }, { "Protection", "tank" } },
-    PALADIN = { { "Holy", "healer" }, { "Protection", "tank" }, { "Retribution", "melee" } },
+    WARRIOR = { { "Arms", "melee2h" }, { "Fury", "melee1h" }, { "Protection", "melee1h", "tank" } },
+    PALADIN = { { "Holy", "melee2h", "healer" }, { "Protection", "melee1h", "tank" }, { "Retribution", "melee2h" } },
     HUNTER  = { { "Beast Mastery", "ranged" }, { "Marksmanship", "ranged" }, { "Survival", "ranged" } },
-    ROGUE   = { { "Assassination", "melee" }, { "Combat", "melee" }, { "Subtlety", "melee" } },
-    PRIEST  = { { "Discipline", "healer" }, { "Holy", "healer" }, { "Shadow", "caster" } },
-    SHAMAN  = { { "Elemental", "caster" }, { "Enhancement", "melee" }, { "Restoration", "healer" } },
+    ROGUE   = { { "Assassination", "melee1h" }, { "Combat", "melee1h" }, { "Subtlety", "melee1h" } },
+    PRIEST  = { { "Discipline", "caster", "healer" }, { "Holy", "caster", "healer" }, { "Shadow", "caster" } },
+    SHAMAN  = { { "Elemental", "caster" }, { "Enhancement", "melee2h" }, { "Restoration", "caster", "healer" } },
     MAGE    = { { "Arcane", "caster" }, { "Fire", "caster" }, { "Frost", "caster" } },
     WARLOCK = { { "Affliction", "caster" }, { "Demonology", "caster" }, { "Destruction", "caster" } },
-    DRUID   = { { "Balance", "caster" }, { "Feral", "melee" }, { "Restoration", "healer" } },
+    DRUID   = { { "Balance", "caster" }, { "Feral", "melee2h" }, { "Restoration", "caster", "healer" } },
 }
+-- Roles gear is scored for (BASE below). Your fighting style is one of the
+-- damage ones; the dungeon role can make it tank or healer.
 local ROLES = { "melee", "ranged", "tank", "caster", "healer" }
 local ROLE_LABEL = { melee = "Melee", ranged = "Ranged", tank = "Tank", caster = "Caster", healer = "Healer", dps = "DPS" }
-local DUNGEON_ROLES = { "tank", "dps", "healer" }
-local DPS_ROLES = { melee = true, ranged = true, caster = true }
+-- Fighting styles: how you deal damage, questing and in dungeons as DPS.
+local STYLES = { "melee2h", "melee1h", "rangedbow", "ranged", "caster" }
+local STYLE_LABEL = { melee2h = "2H melee", melee1h = "1H melee", rangedbow = "Bow", ranged = "Any ranged", caster = "Caster" }
+local STYLE_ROLE = { melee2h = "melee", melee1h = "melee", rangedbow = "ranged", ranged = "ranged", caster = "caster" }
+local DUNGEON_ROLES = { "dps", "tank", "healer" } -- (dps: saved as nil, your style)
 
--- A role's icon: texture and tex coords. Tank, DPS and Healer use the game's
--- group-finder role icons when it has them.
+-- A role's or style's icon: texture and tex coords. Tank, DPS and Healer use
+-- the game's group-finder role icons when it has them.
 local LFG_ROLE = { tank = "TANK", healer = "HEALER", dps = "DAMAGER" }
-local ROLE_ICON = { melee = "INV_Sword_04", ranged = "INV_Weapon_Bow_07", caster = "Spell_Fire_FireBolt02",
-               tank = "INV_Shield_06", healer = "Spell_Holy_HolyBolt", dps = "INV_Sword_04" }
+local ROLE_ICON = { melee2h = "INV_Axe_04", melee1h = "Ability_DualWield", rangedbow = "INV_Weapon_Bow_07",
+                    ranged = "INV_Weapon_Rifle_01", caster = "Spell_Fire_FireBolt02",
+                    tank = "INV_Shield_06", healer = "Spell_Holy_HolyBolt", dps = "INV_Sword_04" }
 local function RoleIcon(role)
     if LFG_ROLE[role] and GetTexCoordsForRole then
         return "Interface\\LFGFrame\\UI-LFG-ICON-ROLES", { GetTexCoordsForRole(LFG_ROLE[role]) }
@@ -118,8 +125,6 @@ local WEAPONS = {
     WARLOCK = Set(7, 10, 15, 19),
     DRUID   = Set(4, 5, 10, 13, 15),
 }
--- Specs that fight with a two-hander only (class -> spec index).
-local TWO_HANDER_SPECS = { WARRIOR = { [1] = true }, PALADIN = { [3] = true } }
 local TWO_HAND_SUBCLASS = Set(1, 5, 6, 8, 10)
 -- Racial weapon skill bonuses (race file -> weapon subclasses).
 local RACIAL_WEAPONS = { Human = Set(4, 5, 7, 8), Orc = Set(0, 1), Dwarf = Set(3), Troll = Set(2, 16) }
@@ -226,25 +231,19 @@ end
 
 ---------------------------------------------------------------- verdict
 
-local db -- RoleLootDB: { spec = index, role = "melee", dungeonRole = "tank" (nil: same as role), ... }
+local db -- RoleLootDB: { spec = index, role = a fighting style, dungeonRole = "tank"/"healer" (nil: damage), ... }
 local player = {}
 
 local function SpecName()
     return db.spec and SPECS[player.class][db.spec][1] or "?"
 end
 
--- The role gear is judged for: the dungeon role inside a dungeon or raid
--- (an off-meta Ret paladin who tanks them), else your role. A DPS dungeon
--- role is your own role when that deals damage, else your class's first
--- damage spec's (a Holy paladin doing damage in dungeons plays melee).
+-- The role gear is judged for: your fighting style's (melee, ranged or
+-- caster), or tank or healer inside a dungeon or raid when that is your
+-- dungeon role (a Ret paladin who tanks them).
 local function ActiveRole()
     local _, kind = IsInInstance()
-    local dungeon = (kind == "party" or kind == "raid") and db.dungeonRole
-    if dungeon ~= "dps" then return dungeon or db.role end
-    if DPS_ROLES[db.role] then return db.role end
-    for _, s in ipairs(SPECS[player.class]) do
-        if DPS_ROLES[s[2]] then return s[2] end
-    end
+    return (kind == "party" or kind == "raid") and db.dungeonRole or STYLE_ROLE[db.role]
 end
 
 -- Whether `class` can wear an item at `level` (and why not), and whether it is
@@ -283,10 +282,17 @@ local function Verdict(link, atLevel)
 
     local score, off = Fit(stats, equipLoc, classID == 2 and subclassID == 19, role, class)
     if off then return "PASS", ROLE_LABEL[off] .. " gear, you play " .. ROLE_LABEL[role] end
-    local twoHander = TWO_HANDER_SPECS[class] and TWO_HANDER_SPECS[class][db.spec] and role == "melee"
-    if twoHander and (equipLoc == "INVTYPE_SHIELD" or (classID == 2 and not RANGED_LOC[equipLoc]
-        and not TWO_HAND_SUBCLASS[subclassID])) then
-        return "GREED", SpecName() .. " uses two-handers"
+    -- Weapons that don't fit your style (as damage dealer; tanks and healers take any).
+    local melee = classID == 2 and not RANGED_LOC[equipLoc] and subclassID ~= 19
+    if role == "melee" and db.role == "melee2h"
+        and (equipLoc == "INVTYPE_SHIELD" or (melee and not TWO_HAND_SUBCLASS[subclassID])) then
+        return "GREED", "You fight with a two-hander"
+    end
+    if role == "melee" and db.role == "melee1h" and melee and TWO_HAND_SUBCLASS[subclassID] then
+        return "GREED", "You fight one-handed"
+    end
+    if role == "ranged" and db.role == "rangedbow" and classID == 2 and RANGED_LOC[equipLoc] and subclassID ~= 2 then
+        return "GREED", "You use a bow"
     end
     if score <= 0 then return "GREED", "Nothing useful for " .. ROLE_LABEL[role] end
 
@@ -402,7 +408,13 @@ local function Toggle(f)
         if w ~= f and w:IsShown() then other = w end
     end
     f:ClearAllPoints()
-    if other then f:SetPoint("TOPLEFT", other, "TOPRIGHT", 4, 0) else f:SetPoint("CENTER") end
+    -- (a screen position, not anchored to `other`: two windows anchored to
+    -- each other is an error the game refuses)
+    if other and other:GetRight() then
+        f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", other:GetRight() + 4, other:GetTop())
+    else
+        f:SetPoint("CENTER")
+    end
     f:Show()
 end
 
@@ -416,7 +428,7 @@ local function SetupText()
     local client, build = GetBuildInfo()
     return string.format("RoleLoot %s, client %s (%s), %s %s level %d, %s, role %s, dungeons %s",
         version, client or "?", build or "?", player.raceName, player.className, UnitLevel("player"), SpecName(),
-        ROLE_LABEL[db.role] or "none", ROLE_LABEL[db.dungeonRole] or "same")
+        STYLE_LABEL[db.role] or "none", ROLE_LABEL[db.dungeonRole or "dps"])
 end
 
 -- A read-only text box at y in `f`, holding `text`, selected when clicked.
@@ -473,16 +485,16 @@ local function OpenSettings()
     f.specButtons = {}
     for i, s in ipairs(SPECS[player.class]) do
         f.specButtons[i] = Button(f, s[1], 100, 14 + (i - 1) * 104, -76, function()
-            db.spec, db.role = i, s[2] -- picking a spec resets the role to the spec's own
+            db.spec, db.role, db.dungeonRole = i, s[2], s[3] -- (the spec's own style and dungeon role)
         end)
     end
 
     local role = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     role:SetPoint("TOPLEFT", 14, -110)
-    role:SetText("Role (what gear you want, off-meta welcome):")
+    role:SetText("Fighting style (questing, and dungeons as DPS; off-meta welcome):")
     f.roleButtons = {}
-    for i, r in ipairs(ROLES) do
-        local b = Button(f, ROLE_LABEL[r], 72, 14 + (i - 1) * 75, -126, function() db.role = r end, r)
+    for i, r in ipairs(STYLES) do
+        local b = Button(f, STYLE_LABEL[r], 72, 14 + (i - 1) * 75, -126, function() db.role = r end, r)
         b.role = r
         f.roleButtons[i] = b
     end
@@ -491,10 +503,10 @@ local function OpenSettings()
     dungeon:SetPoint("TOPLEFT", 14, -160)
     dungeon:SetText("Role in dungeons and raids:")
     f.dungeonButtons = {}
-    for i, r in ipairs({ false, unpack(DUNGEON_ROLES) }) do -- (false: the same as above)
-        local b = Button(f, r and ROLE_LABEL[r] or "Same", 88, 14 + (i - 1) * 92, -176,
-            function() db.dungeonRole = r or nil end, r or nil)
-        b.role = r or nil
+    for i, r in ipairs(DUNGEON_ROLES) do
+        local saved = r ~= "dps" and r or nil
+        local b = Button(f, ROLE_LABEL[r], 88, 14 + (i - 1) * 92, -176, function() db.dungeonRole = saved end, r)
+        b.role = saved
         f.dungeonButtons[i] = b
     end
 
@@ -1177,8 +1189,8 @@ local function MinimapButton()
     b:SetScript("OnEnter", function()
         GameTooltip:SetOwner(b, "ANCHOR_LEFT")
         GameTooltip:AddLine("RoleLoot")
-        GameTooltip:AddLine(SpecName() .. ", " .. (ROLE_LABEL[db.role] or "no role picked"), 1, 1, 1)
-        if db.dungeonRole then GameTooltip:AddLine("In dungeons: " .. ROLE_LABEL[db.dungeonRole], 1, 1, 1) end
+        GameTooltip:AddLine(SpecName() .. ", " .. (STYLE_LABEL[db.role] or "no style picked"), 1, 1, 1)
+        GameTooltip:AddLine("In dungeons: " .. ROLE_LABEL[db.dungeonRole or "dps"], 1, 1, 1)
         GameTooltip:AddLine("Left-click: BiS list   Right-click: settings   Drag: move", 0.6, 0.6, 0.6)
         GameTooltip:Show()
     end)
@@ -1220,8 +1232,14 @@ events:SetScript("OnEvent", function(_, event, rollID)
         db = RoleLootDB
         db.ahead = db.ahead or 3
         db.sort = db.sort or "best"
-        if DPS_ROLES[db.dungeonRole] then db.dungeonRole = "dps" end -- (0.3.0 saved melee/ranged/caster)
         player.className, player.class = UnitClass("player")
+        -- Before 0.9 the role was melee/ranged/tank/caster/healer, the dungeon role any role or "dps".
+        if db.role and not STYLE_LABEL[db.role] then
+            local spec = db.spec and SPECS[player.class][db.spec]
+            if db.role == "tank" or db.role == "healer" then db.dungeonRole = db.dungeonRole or db.role end
+            db.role = (db.role == "ranged" or db.role == "caster") and db.role or (spec and spec[2]) or "melee2h"
+        end
+        if db.dungeonRole ~= "tank" and db.dungeonRole ~= "healer" then db.dungeonRole = nil end
         player.raceName, player.race = UnitRace("player")
         player.faction = UnitFactionGroup("player")
         RoleLootLearned = RoleLootLearned or {}
