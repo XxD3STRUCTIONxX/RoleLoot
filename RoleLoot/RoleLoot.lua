@@ -989,9 +989,12 @@ end
 
 ---------------------------------------------------------------- highlights
 
--- A colored border and label on item buttons: the loot window, roll popups,
--- quest rewards and your bags.
+-- A glowing border, label and roll icon on item buttons: the loot window,
+-- roll popups, quest rewards and your bags. NEED also pulses.
 local MARK_COLOR = { NEED = { 0.1, 1, 0.1 }, GREED = { 1, 0.82, 0 }, PASS = { 1, 0.25, 0.25 } }
+-- The loot roll buttons' own icons: dice, coin, cross.
+local MARK_ICON = { NEED = "Interface\\Buttons\\UI-GroupLoot-Dice-Up", GREED = "Interface\\Buttons\\UI-GroupLoot-Coin-Up",
+                    PASS = "Interface\\Buttons\\UI-GroupLoot-Pass-Up" }
 local ALL = { NEED = true, GREED = true, PASS = true }
 local NEED_ONLY = { NEED = true } -- (bags: only what you should put on)
 
@@ -1012,14 +1015,33 @@ local function MarkAs(button, verdict, icon)
         mark.border:SetBlendMode("ADD")
         mark.border:SetPoint("CENTER")
         mark.border:SetSize(icon:GetWidth() * 1.8, icon:GetHeight() * 1.8)
+        -- A wider, softer second border: the glow.
+        mark.glow = mark:CreateTexture(nil, "ARTWORK")
+        mark.glow:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+        mark.glow:SetBlendMode("ADD")
+        mark.glow:SetAlpha(0.6)
+        mark.glow:SetPoint("CENTER")
+        mark.glow:SetSize(icon:GetWidth() * 2.3, icon:GetHeight() * 2.3)
+        mark.icon = mark:CreateTexture(nil, "OVERLAY")
+        mark.icon:SetSize(16, 16)
+        mark.icon:SetPoint("CENTER", mark, "TOPRIGHT", -2, -2)
         mark.label = mark:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
         mark.label:SetPoint("TOPLEFT", 1, -1)
+        mark.pulse = mark.glow:CreateAnimationGroup()
+        mark.pulse:SetLooping("BOUNCE")
+        local fade = mark.pulse:CreateAnimation("Alpha")
+        fade:SetFromAlpha(0.9)
+        fade:SetToAlpha(0.2)
+        fade:SetDuration(0.7)
         button.RoleLootMark = mark
     end
     local c = MARK_COLOR[verdict]
     mark.border:SetVertexColor(c[1], c[2], c[3])
+    mark.glow:SetVertexColor(c[1], c[2], c[3])
+    mark.icon:SetTexture(MARK_ICON[verdict])
     mark.label:SetTextColor(c[1], c[2], c[3])
     mark.label:SetText(verdict)
+    if verdict == "NEED" then mark.pulse:Play() else mark.pulse:Stop() end
     mark:Show()
 end
 

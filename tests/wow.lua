@@ -57,6 +57,13 @@ function Widget:GetFontString() return self.fontString end
 function Widget:RegisterEvent(e) self.events = self.events or {}; self.events[e] = true end
 function Widget:CreateTexture() local t = New("Texture", nil, self); self.textures = self.textures or {}; table.insert(self.textures, t) return t end
 function Widget:CreateFontString() return New("FontString", nil, self) end
+function Widget:CreateAnimationGroup() return New("AnimationGroup", nil, self) end
+function Widget:CreateAnimation() return New("Animation", nil, self) end
+function Widget:Play() self.playing = true end
+function Widget:Stop() self.playing = false end
+for _, m in ipairs({ "SetLooping", "SetFromAlpha", "SetToAlpha", "SetDuration", "SetAlpha" }) do
+    Widget[m] = Widget[m] or function(self, ...) self[m .. "Args"] = { ... } end
+end
 function Widget:GetCenter() return 500, 500 end
 function Widget:GetEffectiveScale() return 1 end
 
@@ -369,6 +376,9 @@ local function MarkOf(b) return b.RoleLootMark and b.RoleLootMark.shown and b.Ro
 check(MarkOf(lootRows[1].Item) == "PASS", "loot: healer robe PASS")
 check(MarkOf(lootRows[2].Item) == "NEED", "loot: chest NEED")
 check(MarkOf(lootRows[3].Item) == "GREED", "loot: gloves GREED")
+local need, greed = lootRows[2].Item.RoleLootMark, lootRows[3].Item.RoleLootMark
+check(need.pulse.playing and need.icon.texture:find("Dice", 1, true), "NEED pulses, with the dice")
+check(not greed.pulse.playing and greed.icon.texture:find("Coin", 1, true), "GREED is still, with the coin")
 LootFrame.shown = false
 check(not ns.SOURCES[1001][1]:find("Bael", 1, true), "known items keep their source")
 
