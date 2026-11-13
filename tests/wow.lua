@@ -485,6 +485,30 @@ FORGOTTEN[1002] = nil
 bis.upgrades.checked = true
 Click(bis.upgrades)
 check(not Has(1003), "upgrades only hides the worn chest")
+-- On the AH: only items with an auction price, the price shown; click searches the open auction house.
+bis.upgrades.checked = false
+Click(bis.upgrades)
+function GetCoinTextureString(c) return c .. "c" end
+bis.ah.checked = true
+Click(bis.ah)
+check(bis.status.text == "On the AH needs Auctionator or TSM.", "On the AH without prices says why")
+Auctionator = { API = { v1 = { GetAuctionPriceByItemLink = function(_, link)
+    return (link:find("Strong Mail", 1, true) or link:find("Greatsword", 1, true)) and 12345 or nil end } } }
+Click(bis.ah) -- (rebuilds)
+check(bis.ah.checked and Has(1002) and Has(1007) and not Has(1003), "On the AH: only priced items " .. table.concat(Listed(), ","))
+local ahRow
+for _, row in ipairs(bis.rows) do if row.shown and row.link and IdOf(row.link) == 1002 then ahRow = row end end
+check(ahRow.info.text:find("12345c", 1, true), "On the AH: price shown")
+AuctionFrame = New("Frame", "AuctionFrame")
+AuctionFrame.shown = true
+BrowseName = New("EditBox", "BrowseName")
+local searched
+function AuctionFrameBrowse_Search() searched = BrowseName.text end
+Click(ahRow)
+check(searched == "Strong Mail Chest", "click searches the auction house")
+AuctionFrame, BrowseName, Auctionator = nil, nil, nil
+bis.ah.checked = false
+Click(bis.ah)
 Click(ButtonOf(bis, "Next upgrades"))
 local main = {}
 for _, id in ipairs(Listed()) do if ITEMS[id].classID == 2 then main[#main + 1] = id end end

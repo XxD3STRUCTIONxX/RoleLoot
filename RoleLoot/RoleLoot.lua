@@ -644,6 +644,39 @@ local function ItemInfo(id, src)
     if c then return c.name, c.link, c.level end
 end
 
+-- Item `link`'s auction price in copper, or nil. Addons can't look prices up
+-- online: it comes from Auctionator or TradeSkillMaster (their last scan).
+local function AHPrice(link)
+    local api = Auctionator and Auctionator.API and Auctionator.API.v1
+    if api and api.GetAuctionPriceByItemLink then
+        local ok, p = pcall(api.GetAuctionPriceByItemLink, "RoleLoot", link)
+        return ok and p or nil
+    elseif TSM_API and TSM_API.GetCustomPriceValue and TSM_API.ToItemString then
+        local ok, p = pcall(TSM_API.GetCustomPriceValue, "dbmarket", TSM_API.ToItemString(link))
+        return ok and p or nil
+    end
+end
+local function HasPrices()
+    return (Auctionator and Auctionator.API and Auctionator.API.v1) or TSM_API
+end
+
+-- Searches the open auction house for item `link` (Auctionator's search, else
+-- the game's browse tab). False when the auction house isn't open.
+local function SearchAH(link)
+    local name = link:match("%[(.-)%]")
+    local open = (AuctionFrame and AuctionFrame:IsShown()) or (AuctionHouseFrame and AuctionHouseFrame:IsShown())
+    if not (name and open) then return false end
+    local api = Auctionator and Auctionator.API and Auctionator.API.v1
+    if api and api.MultiSearchExact and pcall(api.MultiSearchExact, "RoleLoot", { name }) then return true end
+    if BrowseName and AuctionFrameBrowse_Search then
+        if AuctionFrameTab1 then AuctionFrameTab1:Click() end
+        BrowseName:SetText(name)
+        AuctionFrameBrowse_Search()
+        return true
+    end
+    return false
+end
+
 -- Per slot group, the listed items for your spec and role up to db.ahead
 -- levels above you: by score ("best"), or only upgrades, lowest level first
 -- ("next"). Also how many items the game hasn't loaded yet.
@@ -656,14 +689,15 @@ local function Pick()
         local _, link, level = ItemInfo(id, src)
         if g and not link then
             if asked[id] then loading = loading + 1 end
-        elseif g and (not src[4] or src[4] == player.faction) and level <= maxLevel then
+        elseif g and (not src[4] or src[4] == player.faction) and level <= maxLevel
+            and not (db.ahOnly and not AHPrice(link)) then
             local verdict, reason, score, worn = Verdict(link, level)
             local upgrade = score and IsUpgrade(score, worn)
             if score and (upgrade or (db.sort == "best" and not db.upgradesOnly)) then
                 groups[g] = groups[g] or {}
                 tinsert(groups[g], { link = link, icon = icon, score = score, worn = worn, upgrade = upgrade,
                                      lowArmor = verdict == "GREED" and reason == "Not your best armor type",
-                                     minLevel = level, src = src })
+                                     minLevel = level, src = src, price = db.ahOnly and AHPrice(link) })
             end
         end
     end
@@ -678,7 +712,7 @@ local function Pick()
 end
 
 -- Row `i` of window `win`'s list: a heading, or an item (hover: its tooltip,
--- shift-click: link it in chat).
+-- shift-click: link it in chat, click: search the open auction house for it).
 local function Row(win, i)
     if win.rows[i] then return win.rows[i] end
     local row = CreateFrame("Button", nil, win.content)
@@ -706,7 +740,9 @@ local function Row(win, i)
     end)
     row:SetScript("OnLeave", function() GameTooltip:Hide() end)
     row:SetScript("OnClick", function()
-        if row.link and IsShiftKeyDown() then ChatEdit_InsertLink(row.link) end
+        if not row.link then return end
+        if IsShiftKeyDown() then ChatEdit_InsertLink(row.link)
+        elseif not SearchAH(row.link) and db.ahOnly then print("|cff20ff20RoleLoot|r: open the auction house to search for it.") end
     end)
     win.rows[i] = row
     return row
@@ -746,6 +782,7 @@ BuildList = function()
     end
     bis.upgrades:SetChecked(db.upgradesOnly)
     bis.upgrades:SetShown(db.sort == "best") -- ("next" lists upgrades only anyway)
+    bis.ah:SetChecked(db.ahOnly)
 
     local n, groups, loading = 0, {}, 0
     if db.role then
@@ -765,8 +802,10 @@ BuildList = function()
                     or "empty slot") .. "|r"
             end
             if e.lowArmor then gain = gain .. " |cffffd200lower armor|r" end
+            local where = "|cffaaaaaa" .. e.src[1] .. ", " .. e.src[2] .. "|r"
+            if e.price then where = "|cff4cc8ffAH|r " .. GetCoinTextureString(e.price) end
             n = n + 1
-            Put(bis, n, e.link, e.link, lv .. "   " .. gain .. "   |cffaaaaaa" .. e.src[1] .. ", " .. e.src[2] .. "|r", e.icon)
+            Put(bis, n, e.link, e.link, lv .. "   " .. gain .. "   " .. where, e.icon)
         end
     end
     EndRows(bis, n)
@@ -775,6 +814,8 @@ BuildList = function()
         bis.status:SetText("Pick your spec and role first (Settings).")
     elseif loading > 0 and GetTime() < loadUntil then
         bis.status:SetText("Loading " .. loading .. " items from the server...")
+    elseif db.ahOnly and not HasPrices() then
+        bis.status:SetText("On the AH needs Auctionator or TSM.")
     elseif n == 0 then
         bis.status:SetText("Nothing found up to " .. db.ahead .. " levels above you.")
     else
@@ -816,6 +857,15 @@ OpenBis = function()
     local upgradesLabel = f.upgrades:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     upgradesLabel:SetPoint("LEFT", f.upgrades, "RIGHT", 2, 0)
     upgradesLabel:SetText("Upgrades only")
+    -- Only items with an auction price, shown instead of the source; click one
+    -- while the auction house is open to search for it.
+    f.ah = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
+    f.ah:SetSize(22, 22)
+    f.ah:SetPoint("TOPLEFT", 120, -58)
+    f.ah:SetScript("OnClick", function(b) db.ahOnly = b:GetChecked() and true or false BuildList() end)
+    local ahLabel = f.ah:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    ahLabel:SetPoint("LEFT", f.ah, "RIGHT", 2, 0)
+    ahLabel:SetText("On the AH")
 
     f.status = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     f.status:SetPoint("TOPRIGHT", -100, -64)
@@ -1098,15 +1148,7 @@ end
 -- from Auctionator or TradeSkillMaster when one is installed (their last scan).
 SaleValue = function(link)
     local vendor = select(11, GetInfo(link)) or 0
-    local ah
-    local api = Auctionator and Auctionator.API and Auctionator.API.v1
-    if api and api.GetAuctionPriceByItemLink then
-        local ok, p = pcall(api.GetAuctionPriceByItemLink, "RoleLoot", link)
-        ah = ok and p or nil
-    elseif TSM_API and TSM_API.GetCustomPriceValue and TSM_API.ToItemString then
-        local ok, p = pcall(TSM_API.GetCustomPriceValue, "dbmarket", TSM_API.ToItemString(link))
-        ah = ok and p or nil
-    end
+    local ah = AHPrice(link)
     -- The AH keeps 5%, and a deposit and waiting cost something: only worth it at 1.5x the vendor.
     local net = ah and ah * 0.95 or 0
     if net > vendor * 1.5 and net - vendor >= 100 then return net, "AH" end
