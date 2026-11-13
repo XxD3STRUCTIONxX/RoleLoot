@@ -967,6 +967,13 @@ end
 -- In a dungeon or raid anything counts (a chest's loot: "Trash Drops"); in the
 -- world only rare and boss mobs, so a wolf's random green isn't listed.
 local WORLD_SOURCES = { rare = true, rareelite = true, worldboss = true }
+-- `v`, or nil when the game hides it as a "secret" value (this client does
+-- that to unit names and GUIDs in some places; comparing one is an error).
+local function Plain(v)
+    if issecretvalue and issecretvalue(v) then return nil end
+    return v
+end
+
 local function Learn()
     local inside = IsInInstance()
     for slot = 1, GetNumLootItems() do
@@ -975,9 +982,10 @@ local function Learn()
         local _, _, _, equipLoc = GetInstant(id or 0)
         local _, _, quality, itemLevel, minLevel = GetInfo(link or 0)
         if id and not ns.SOURCES[id] and GROUP_OF[equipLoc] and (quality or 0) >= 2 then
-            local guid = GetLootSourceInfo and GetLootSourceInfo(slot)
-            local mob = guid and guid == UnitGUID("target") and UnitName("target")
-            if inside or (mob and WORLD_SOURCES[UnitClassification("target")]) then
+            local guid = Plain(GetLootSourceInfo and GetLootSourceInfo(slot))
+            local target = Plain(UnitGUID("target"))
+            local mob = guid and target and guid == target and Plain(UnitName("target"))
+            if inside or (mob and WORLD_SOURCES[Plain(UnitClassification("target")) or ""]) then
                 local level = (minLevel or 0) > 0 and minLevel or math.max(0, math.min(60, (itemLevel or 5) - 5))
                 local src = { mob or "Trash Drops", (inside and GetInstanceInfo() or GetRealZoneText()) or "?", level }
                 RoleLootLearned[id], ns.SOURCES[id], asked[id] = src, src, true

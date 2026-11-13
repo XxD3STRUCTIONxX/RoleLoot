@@ -410,6 +410,14 @@ T.loot, T.lootSource = { 1020 }, "Creature-3"
 T.target = { guid = "Creature-3", name = "Rare Ogre", class = "rare" }
 Fire("LOOT_OPENED")
 check(RoleLootLearned[1020] and RoleLootLearned[1020][2] == "Searing Gorge", "a rare mob's drop is learned")
+-- Secret unit values (the game hides target names and GUIDs in some places): no error, no secret saved.
+SECRETS = { ["Creature-4"] = true, ["Secret Boss"] = true }
+function issecretvalue(v) return SECRETS[v] == true end
+T.kind, T.loot, T.lootSource = "party", { 1019 }, "Creature-4"
+T.target = { guid = "Creature-4", name = "Secret Boss", class = "elite" }
+Fire("LOOT_OPENED")
+check(RoleLootLearned[1019] and RoleLootLearned[1019][1] == "Trash Drops", "secret target: learned without its name")
+issecretvalue, T.kind = nil, "none"
 T.target, T.lootSource = nil, nil
 RunTimers()
 
