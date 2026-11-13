@@ -443,6 +443,7 @@ Auctionator = { API = { v1 = { GetAuctionPriceByItemLink = function(_, link)
 QuestInfo_Display()
 check(MarkOf(tiles[3]) == "AH" and not MarkOf(tiles[2]), "quest: AH when it sells for more there")
 Auctionator = nil
+Expect(1012, "GREED", "Healer gear, you play Melee, sell it") -- (no use, but a vendor pays: not PASS)
 
 -- Bags: NEED only.
 T.bags = { 1001, 1002, 1005 }

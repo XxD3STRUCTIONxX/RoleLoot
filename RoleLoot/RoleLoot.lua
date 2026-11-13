@@ -278,10 +278,16 @@ local function Verdict(link, atLevel)
     if not stats then return end
     local class, role = player.class, ActiveRole()
     local usable, why, lowArmor = CanUse(class, equipLoc, classID, subclassID, math.max(UnitLevel("player"), atLevel or 0))
-    if not usable then return "PASS", why end
+    -- No use to you: GREED when a vendor pays for it, PASS only when it's worth nothing.
+    local function NoUse(reason)
+        local sells = select(11, (C_Item and C_Item.GetItemInfo or GetItemInfo)(link)) or 0
+        if sells > 0 then return "GREED", reason .. ", sell it" end
+        return "PASS", reason
+    end
+    if not usable then return NoUse(why) end
 
     local score, off = Fit(stats, equipLoc, classID == 2 and subclassID == 19, role, class)
-    if off then return "PASS", ROLE_LABEL[off] .. " gear, you play " .. ROLE_LABEL[role] end
+    if off then return NoUse(ROLE_LABEL[off] .. " gear, you play " .. ROLE_LABEL[role]) end
     -- Weapons that don't fit your style (as damage dealer; tanks and healers take any).
     local melee = classID == 2 and not RANGED_LOC[equipLoc] and subclassID ~= 19
     if role == "melee" and db.role == "melee2h"
