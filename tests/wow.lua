@@ -101,7 +101,7 @@ local function IdOf(x) return type(x) == "number" and x or tonumber(tostring(x):
 FORGOTTEN = {} -- items the game has dropped from its cache
 ASKED = {} -- items GetItemInfo was called for
 C_Item = {
-    GetItemStats = function(link) local i = ITEMS[IdOf(link)] return i and i.stats end,
+    GetItemStats = function(link) local i = ITEMS[IdOf(link)] return i and not FORGOTTEN[IdOf(link)] and i.stats or nil end,
     GetItemInfoInstant = function(x)
         local id = IdOf(x); local i = ITEMS[id]
         if i then return id, "", "", i.equipLoc, "icon" .. id, i.classID, i.subclassID end
@@ -125,7 +125,11 @@ function UnitRace() return "Human", "Human" end
 function UnitFactionGroup() return "Alliance" end
 function UnitLevel() return T.level end
 function IsInInstance() return T.kind ~= "none", T.kind end
-function GetInventoryItemLink(_, slot) return Link(T.equipped[slot]) end
+-- (an item the game forgot: a link without its name, as the game gives)
+function GetInventoryItemLink(_, slot)
+    local id = T.equipped[slot]
+    return id and (FORGOTTEN[id] and ("|cff1eff00|Hitem:" .. id .. "::::::::|h[]|h|r") or Link(id))
+end
 function GetLootSlotLink(slot) return Link(T.loot[slot]) end
 function GetNumLootItems() return #T.loot end
 function GetLootSourceInfo() return T.lootSource end
@@ -482,6 +486,10 @@ RoleLootBisFrame.ahead.text = nil
 Click(ButtonOf(bis, "-")) Click(ButtonOf(bis, "+"))
 check(Has(1002), "BiS: items the game forgets stay listed")
 FORGOTTEN[1002] = nil
+-- Worn gear the game forgets keeps its score: no "empty slot" flicker.
+FORGOTTEN[1003] = true
+Expect(1002, "NEED", "Upgrade +")
+FORGOTTEN[1003] = nil
 bis.upgrades.checked = true
 Click(bis.upgrades)
 check(not Has(1003), "upgrades only hides the worn chest")

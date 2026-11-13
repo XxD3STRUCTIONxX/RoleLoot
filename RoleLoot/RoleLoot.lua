@@ -207,9 +207,12 @@ end
 -- GetItemStats plus ITEM_MOD_PROC_SHORT: its "Chance on hit:" effects, which
 -- the game's stats leave out (a weapon's fire blast, a stun).
 -- shortcut: every proc is worth the same, whatever it does; weigh them per item if that misleads.
+-- Kept by the link's item string: when the game forgets an item, its links
+-- lose their name ("[]"), and your worn gear scored 0 now and then (a flickering list).
 local statCache = {}
 local function GetStats(link)
-    if statCache[link] then return statCache[link] end
+    local key = link:match("item:[%-%d:]+") or link
+    if statCache[key] then return statCache[key] end
     local stats = GetItemStats(link)
     if not stats then return end -- (not loaded yet: ask again later)
     local copy, procs = {}, 0
@@ -218,7 +221,7 @@ local function GetStats(link)
         if text and text:find("^Chance on hit:") then procs = procs + 1 end
     end
     copy.ITEM_MOD_PROC_SHORT = procs > 0 and procs or nil
-    statCache[link] = copy
+    statCache[key] = copy
     return copy
 end
 
