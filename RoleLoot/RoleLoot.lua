@@ -656,6 +656,17 @@ local function AHPrice(link)
         return ok and p or nil
     end
 end
+-- `copper` as gold, silver and copper with coin icons (this client has no GetCoinTextureString).
+local function Money(copper)
+    copper = math.floor(copper)
+    local g, s, c = math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100
+    local icon = "|TInterface\\MoneyFrame\\UI-%sIcon:0:0:2:0|t"
+    local out = {}
+    if g > 0 then out[#out + 1] = g .. icon:format("Gold") end
+    if s > 0 then out[#out + 1] = s .. icon:format("Silver") end
+    if c > 0 or #out == 0 then out[#out + 1] = c .. icon:format("Copper") end
+    return table.concat(out, " ")
+end
 local function HasPrices()
     return (Auctionator and Auctionator.API and Auctionator.API.v1) or TSM_API
 end
@@ -803,7 +814,7 @@ BuildList = function()
             end
             if e.lowArmor then gain = gain .. " |cffffd200lower armor|r" end
             local where = "|cffaaaaaa" .. e.src[1] .. ", " .. e.src[2] .. "|r"
-            if e.price then where = "|cff4cc8ffAH|r " .. GetCoinTextureString(e.price) end
+            if e.price then where = "|cff4cc8ffAH|r " .. Money(e.price) end
             n = n + 1
             Put(bis, n, e.link, e.link, lv .. "   " .. gain .. "   " .. where, e.icon)
         end
@@ -861,7 +872,7 @@ OpenBis = function()
     -- while the auction house is open to search for it.
     f.ah = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
     f.ah:SetSize(22, 22)
-    f.ah:SetPoint("TOPLEFT", 120, -58)
+    f.ah:SetPoint("TOPLEFT", 140, -58)
     f.ah:SetScript("OnClick", function(b) db.ahOnly = b:GetChecked() and true or false BuildList() end)
     local ahLabel = f.ah:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     ahLabel:SetPoint("LEFT", f.ah, "RIGHT", 2, 0)
