@@ -8,7 +8,7 @@ const here = __dirname;
 const addon = path.join(here, "..", "RoleLoot");
 const L = lauxlib.luaL_newstate();
 lualib.luaL_openlibs(L);
-for (const [name, file] of [["DATA_SRC", path.join(addon, "Data.lua")], ["ADDON_SRC", path.join(addon, "RoleLoot.lua")]]) {
+for (const [name, file] of [["DATA_SRC", path.join(addon, "Data.lua")], ["FOREVER_SRC", path.join(addon, "ForeverData.lua")], ["ADDON_SRC", path.join(addon, "RoleLoot.lua")]]) {
   lua.lua_pushstring(L, to_luastring(fs.readFileSync(file, "utf8")));
   lua.lua_setglobal(L, to_luastring(name));
 }

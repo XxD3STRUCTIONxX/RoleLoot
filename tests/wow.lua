@@ -282,6 +282,9 @@ T.equipped = { [5] = 1003, [16] = 1010, [9] = 1014 }
 
 local ns = {}
 load(DATA_SRC, "@Data.lua")("RoleLoot", ns)
+check(ns.SOURCES[3463] == nil, "3463 not in Data.lua")
+load(FOREVER_SRC, "@ForeverData.lua")("RoleLoot", ns)
+check(ns.SOURCES[3463] and ns.SOURCES[3463][2] == "Stealing Supplies", "ForeverData.lua adds missing items")
 local count = 0
 for _ in pairs(ns.SOURCES) do count = count + 1 end
 check(count > 2000, "Data.lua has " .. count .. " items")
