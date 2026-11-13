@@ -8,7 +8,7 @@ Built so a Retribution paladin stops being told to Need healer gear.
 
 - **Setup window** (`/rl`, or right-click the minimap button): pick your talent spec and fighting style (2H melee, 1H melee, Bow, Any ranged, Caster), off-meta included. The style decides which weapons you NEED (a 2H fighter greeds one-handers and shields). Race and class come from your character.
 - **Dungeon role**: Tank, DPS or Healer (with role icons), used inside dungeons and raids, for example a Retribution paladin who tanks dungeons. DPS means your fighting style.
-- **Highlights**: a colored NEED / GREED / PASS border on the loot window and roll popups, NEED on the best quest reward, and NEED on upgrades sitting in your bags.
+- **Highlights**: a colored NEED / GREED / PASS border on the loot window and roll popups, NEED on the best quest reward (or, with no upgrade, SELL on the choice that sells best at a vendor, or AH when Auctionator or TradeSkillMaster prices say the auction house pays more), and NEED on upgrades sitting in your bags.
 - **Tooltips**: every piece of gear gets a Need / Greed / Pass line, compared with what you wear. Mana regen and spell power count for paladins and shamans, and "Chance on hit" effects count for physical roles. A few points of armor is not an upgrade.
 - **Loot rolls**: the same verdict is printed in chat when a roll starts. RoleLoot never rolls for you.
 - **BiS list** (`/rl bis`, or left-click the minimap button): the best items per slot from 7000 boss drops, dungeon and raid trash drops and quest rewards, with item icons.

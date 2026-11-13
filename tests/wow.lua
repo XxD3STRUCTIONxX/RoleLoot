@@ -109,7 +109,9 @@ C_Item = {
     GetItemInfo = function(x)
         local id = IdOf(x); local i = ITEMS[id]
         ASKED[id] = true
-        if i and not FORGOTTEN[id] then return i.name, Link(id), 2, i.ilvl or 30, i.minLevel end
+        if i and not FORGOTTEN[id] then
+            return i.name, Link(id), 2, i.ilvl or 30, i.minLevel, nil, nil, nil, nil, nil, i.sell or 0
+        end
     end,
 }
 C_TooltipInfo = { GetHyperlink = function(link)
@@ -423,6 +425,16 @@ T.quest = { 1001, 1011, 1002 }
 QuestInfo_Display()
 local tiles = QuestInfoFrame.rewardsFrame.RewardButtons
 check(MarkOf(tiles[3]) == "NEED" and not MarkOf(tiles[1]) and not MarkOf(tiles[2]), "quest: best reward marked only")
+-- No upgrade: the best-selling choice gets SELL, or AH when Auctionator says it's worth more there.
+ITEMS[1003].sell, ITEMS[1005].sell, ITEMS[1012].sell = 200, 500, 100
+T.quest = { 1003, 1005, 1012 }
+QuestInfo_Display()
+check(MarkOf(tiles[2]) == "SELL" and not MarkOf(tiles[1]) and not MarkOf(tiles[3]), "quest: best vendor price gets SELL")
+Auctionator = { API = { v1 = { GetAuctionPriceByItemLink = function(_, link)
+    return link:find("Healing Ring", 1, true) and 5000 or 300 end } } }
+QuestInfo_Display()
+check(MarkOf(tiles[3]) == "AH" and not MarkOf(tiles[2]), "quest: AH when it sells for more there")
+Auctionator = nil
 
 -- Bags: NEED only.
 T.bags = { 1001, 1002, 1005 }

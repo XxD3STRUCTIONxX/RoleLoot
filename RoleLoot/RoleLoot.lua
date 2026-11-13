@@ -991,10 +991,12 @@ end
 
 -- A glowing border, label and roll icon on item buttons: the loot window,
 -- roll popups, quest rewards and your bags. NEED also pulses.
-local MARK_COLOR = { NEED = { 0.1, 1, 0.1 }, GREED = { 1, 0.82, 0 }, PASS = { 1, 0.25, 0.25 } }
--- The loot roll buttons' own icons: dice, coin, cross.
+local MARK_COLOR = { NEED = { 0.1, 1, 0.1 }, GREED = { 1, 0.82, 0 }, PASS = { 1, 0.25, 0.25 },
+                     SELL = { 1, 0.55, 0.1 }, AH = { 0.3, 0.8, 1 } }
+-- The loot roll buttons' own icons: dice, coin, cross; gold for selling.
 local MARK_ICON = { NEED = "Interface\\Buttons\\UI-GroupLoot-Dice-Up", GREED = "Interface\\Buttons\\UI-GroupLoot-Coin-Up",
-                    PASS = "Interface\\Buttons\\UI-GroupLoot-Pass-Up" }
+                    PASS = "Interface\\Buttons\\UI-GroupLoot-Pass-Up", SELL = "Interface\\MoneyFrame\\UI-GoldIcon",
+                    AH = "Interface\\MoneyFrame\\UI-GoldIcon" }
 local ALL = { NEED = true, GREED = true, PASS = true }
 local NEED_ONLY = { NEED = true } -- (bags: only what you should put on)
 
@@ -1076,8 +1078,29 @@ local function PaintRolls()
     end
 end
 
+-- What `link` is worth to you in copper, and where to sell it: "SELL" (a
+-- vendor) or "AH". Addons can't look up prices online: the AH price comes
+-- from Auctionator or TradeSkillMaster when one is installed (their last scan).
+local function SaleValue(link)
+    local vendor = select(11, GetInfo(link)) or 0
+    local ah
+    local api = Auctionator and Auctionator.API and Auctionator.API.v1
+    if api and api.GetAuctionPriceByItemLink then
+        local ok, p = pcall(api.GetAuctionPriceByItemLink, "RoleLoot", link)
+        ah = ok and p or nil
+    elseif TSM_API and TSM_API.GetCustomPriceValue and TSM_API.ToItemString then
+        local ok, p = pcall(TSM_API.GetCustomPriceValue, "dbmarket", TSM_API.ToItemString(link))
+        ah = ok and p or nil
+    end
+    -- The AH keeps 5%, and a deposit and waiting cost something: only worth it at 1.5x the vendor.
+    local net = ah and ah * 0.95 or 0
+    if net > vendor * 1.5 and net - vendor >= 100 then return net, "AH" end
+    return vendor, "SELL"
+end
+
 -- Quest rewards (the quest giver's window, the quest log, the map's quest
--- details): the biggest upgrade among them gets NEED, the rest nothing.
+-- details): the biggest upgrade among them gets NEED, the rest nothing. With
+-- no upgrade, the choice that sells best gets SELL (vendor) or AH.
 local questFrame, questLog
 local function PaintQuest()
     if not (questFrame and questFrame:IsVisible()) then return end
@@ -1089,15 +1112,22 @@ local function PaintQuest()
     end
     local GetLink = questLog and GetQuestLogItemLink or GetQuestItemLink
     local best, bestScore
+    local cash, cashValue, cashWhere = nil, 0, nil -- (no upgrade: the choice that sells best)
     for _, tile in pairs(tiles) do
         MarkAs(tile, nil)
         if tile:IsShown() and (tile.objectType == nil or tile.objectType == "item")
             and (tile.type == "choice" or tile.type == "reward") then
-            local verdict, _, score = Verdict(GetLink(tile.type, tile:GetID()))
+            local link = GetLink(tile.type, tile:GetID())
+            local verdict, _, score = Verdict(link)
             if verdict == "NEED" and (not bestScore or score > bestScore) then best, bestScore = tile, score end
+            if tile.type == "choice" and link then
+                local value, where = SaleValue(link)
+                if value > cashValue then cash, cashValue, cashWhere = tile, value, where end
+            end
         end
     end
-    if best then MarkAs(best, "NEED", best.Icon or best.icon) end
+    if best then MarkAs(best, "NEED", best.Icon or best.icon)
+    elseif cash then MarkAs(cash, cashWhere, cash.Icon or cash.icon) end
 end
 
 -- Bags: the combined bag and the separate ones (modern UI), else the old ContainerFrame_Update.
