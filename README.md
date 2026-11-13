@@ -44,6 +44,16 @@ npm install wow-classic-items@2.0.1
 node make_data.js node_modules/wow-classic-items > RoleLoot/Data.lua
 ```
 
-## License
+`RoleLoot/ForeverData.lua` adds WoW: Forever items that list misses (quest rewards, dungeon and world drops):
 
-All Rights Reserved (see `RoleLoot/LICENSE`). Data.lua's item sources come from wow-classic-items under the MIT License.
+```
+python make_forever.py wow_forever_complete.db <everloot folder> > RoleLoot/ForeverData.lua
+```
+
+## License and credits
+
+All Rights Reserved (see `RoleLoot/LICENSE`), except the item data below, which stays under its own terms.
+
+- Data.lua's item sources: [wow-classic-items](https://github.com/Nakroma/wow-classic-items) by Nakroma, MIT License.
+- ForeverData.lua's quest rewards and dungeon drops: [Forever Mastery](https://forevermastery.com), used with permission.
+- ForeverData.lua's drops and quest rewards seen by players: Data from [Everloot](https://everloot.app), [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), used with permission.

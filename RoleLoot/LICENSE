@@ -32,3 +32,13 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+------------------------------------------------------------------------------
+ForeverData.lua
+
+Quest rewards and dungeon drops from Forever Mastery (https://forevermastery.com),
+used with permission.
+
+Drop sources and quest rewards observed by players: Data from Everloot
+(https://everloot.app), CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/),
+used with permission. That data stays under CC BY-SA 4.0; the rest of RoleLoot does not.
