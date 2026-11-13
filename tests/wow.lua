@@ -442,8 +442,9 @@ Auctionator = { API = { v1 = { GetAuctionPriceByItemLink = function(_, link)
     return link:find("Healing Ring", 1, true) and 5000 or 300 end } } }
 QuestInfo_Display()
 check(MarkOf(tiles[3]) == "AH" and not MarkOf(tiles[2]), "quest: AH when it sells for more there")
+Expect(1012, "GREED", "sell it on the AH")
 Auctionator = nil
-Expect(1012, "GREED", "Healer gear, you play Melee, sell it") -- (no use, but a vendor pays: not PASS)
+Expect(1012, "GREED", "Healer gear, you play Melee, sell it to a vendor") -- (no use, but a vendor pays: not PASS)
 
 -- Bags: NEED only.
 T.bags = { 1001, 1002, 1005 }

@@ -270,6 +270,7 @@ end
 -- or the game hasn't loaded its stats yet. When the item suits your spec and
 -- role, also its score and that of what you wear in its slot. `atLevel`: the
 -- level you'd wear it at (the BiS list's items ahead of you), for armor types.
+local SaleValue -- (below, with the quest rewards)
 local function Verdict(link, atLevel)
     if not (db and db.role and link) then return end
     local _, _, _, equipLoc, _, classID, subclassID = GetInstant(link)
@@ -280,8 +281,8 @@ local function Verdict(link, atLevel)
     local usable, why, lowArmor = CanUse(class, equipLoc, classID, subclassID, math.max(UnitLevel("player"), atLevel or 0))
     -- No use to you: GREED when a vendor pays for it, PASS only when it's worth nothing.
     local function NoUse(reason)
-        local sells = select(11, (C_Item and C_Item.GetItemInfo or GetItemInfo)(link)) or 0
-        if sells > 0 then return "GREED", reason .. ", sell it" end
+        local value, where = SaleValue(link)
+        if value > 0 then return "GREED", reason .. (where == "AH" and ", sell it on the AH" or ", sell it to a vendor") end
         return "PASS", reason
     end
     if not usable then return NoUse(why) end
@@ -1095,7 +1096,7 @@ end
 -- What `link` is worth to you in copper, and where to sell it: "SELL" (a
 -- vendor) or "AH". Addons can't look up prices online: the AH price comes
 -- from Auctionator or TradeSkillMaster when one is installed (their last scan).
-local function SaleValue(link)
+SaleValue = function(link)
     local vendor = select(11, GetInfo(link)) or 0
     local ah
     local api = Auctionator and Auctionator.API and Auctionator.API.v1
