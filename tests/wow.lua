@@ -140,6 +140,7 @@ function GetInstanceInfo() return "Blackrock Depths" end
 function GetRealZoneText() return "Searing Gorge" end
 function GetLootRollItemLink(id) return Link(T.rolls[id]) end
 function GetQuestItemLink(_, i) return Link(T.quest[i]) end
+function GetQuestLogItemLink(_, i) return Link((T.questLog or {})[i]) end
 C_Container = { GetContainerItemLink = function(_, slot) return Link(T.bags[slot]) end }
 function GetTime() return T.time end
 function GetBuildInfo() return "1.16.0", "60001" end
@@ -219,6 +220,7 @@ for i = 1, 3 do
     local tile = New("Button", nil, QuestInfoFrame.rewardsFrame)
     tile.type, tile.objectType, tile.id = "choice", "item", i
     tile.Icon = New("Texture", nil, tile)
+    tile.Name = tile:CreateFontString()
     QuestInfoFrame.rewardsFrame.RewardButtons[i] = tile
 end
 function QuestInfo_Display() end
@@ -435,15 +437,19 @@ RunTimers()
 check(MarkOf(GroupLootFrame1.IconFrame) == "NEED", "roll popup: greatsword NEED")
 check(printed[#printed]:find("NEED", 1, true), "roll printed in chat")
 
--- Quest rewards: only the best NEED gets a mark.
+-- Quest rewards: only the best NEED gets a mark. The tiles show the names of what the game lists.
+local function ShowQuest(list)
+    for i, tile in ipairs(QuestInfoFrame.rewardsFrame.RewardButtons) do tile.Name:SetText(ITEMS[list[i]].name) end
+    QuestInfo_Display()
+end
 T.quest = { 1001, 1011, 1002 }
-QuestInfo_Display()
+ShowQuest(T.quest)
 local tiles = QuestInfoFrame.rewardsFrame.RewardButtons
 check(MarkOf(tiles[3]) == "NEED" and not MarkOf(tiles[1]) and not MarkOf(tiles[2]), "quest: best reward marked only")
 -- No upgrade: the best-selling choice gets SELL, or AH when Auctionator says it's worth more there.
 ITEMS[1003].sell, ITEMS[1005].sell, ITEMS[1012].sell = 200, 500, 100
 T.quest = { 1003, 1005, 1012 }
-QuestInfo_Display()
+ShowQuest(T.quest)
 check(MarkOf(tiles[2]) == "SELL" and not MarkOf(tiles[1]) and not MarkOf(tiles[3]), "quest: best vendor price gets SELL")
 Auctionator = { API = { v1 = { GetAuctionPriceByItemLink = function(_, link)
     return link:find("Healing Ring", 1, true) and 5000 or 300 end } } }
@@ -452,6 +458,12 @@ check(MarkOf(tiles[3]) == "AH" and not MarkOf(tiles[2]), "quest: AH when it sell
 Expect(1012, "GREED", "sell it on the AH")
 Auctionator = nil
 Expect(1012, "GREED", "Healer gear, you play Melee, sell it to a vendor") -- (no use, but a vendor pays: not PASS)
+
+-- The quest log open while the game still says quest giver: the giver's old rewards aren't judged.
+T.questLog = { 1002, 1001, 1003 }
+ShowQuest(T.questLog)
+check(MarkOf(tiles[1]) == "NEED" and not MarkOf(tiles[2]), "quest log: the mark follows the tile's own item")
+T.questLog = nil
 
 -- Bags: NEED only.
 T.bags = { 1001, 1002, 1005 }

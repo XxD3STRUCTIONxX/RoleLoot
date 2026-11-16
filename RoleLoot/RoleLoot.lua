@@ -1173,6 +1173,19 @@ end
 -- details): the biggest upgrade among them gets NEED, the rest nothing. With
 -- no upgrade, the choice that sells best gets SELL (vendor) or AH.
 local questFrame, questLog
+-- A tile's item: the quest log's or the quest giver's, whichever matches the name the tile shows
+-- (questLog can be wrong, and the other one then gives a different quest's items).
+local function TileLink(tile)
+    local label = tile.Name or (tile:GetName() and _G[tile:GetName() .. "Name"])
+    local want = label and label:GetText()
+    local first, second = GetQuestItemLink, GetQuestLogItemLink
+    if questLog then first, second = second, first end
+    for _, get in ipairs({ first, second }) do
+        local link = get and get(tile.type, tile:GetID())
+        if link and (not want or link:find("[" .. want .. "]", 1, true)) then return link end
+    end
+end
+
 local function PaintQuest()
     if not (questFrame and questFrame:IsVisible()) then return end
     local tiles = questFrame.RewardButtons
@@ -1181,14 +1194,13 @@ local function PaintQuest()
         local name = questFrame:GetName()
         for i = 1, 10 do tiles[i] = name and _G[name .. "QuestInfoItem" .. i] or nil end
     end
-    local GetLink = questLog and GetQuestLogItemLink or GetQuestItemLink
     local best, bestScore
     local cash, cashValue, cashWhere = nil, 0, nil -- (no upgrade: the choice that sells best)
     for _, tile in pairs(tiles) do
         MarkAs(tile, nil)
         if tile:IsShown() and (tile.objectType == nil or tile.objectType == "item")
             and (tile.type == "choice" or tile.type == "reward") then
-            local link = GetLink(tile.type, tile:GetID())
+            local link = TileLink(tile)
             local verdict, _, score = Verdict(link)
             if verdict == "NEED" and (not bestScore or score > bestScore) then best, bestScore = tile, score end
             if tile.type == "choice" and link then
