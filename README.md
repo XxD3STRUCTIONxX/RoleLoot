@@ -6,7 +6,7 @@ Built so a Retribution paladin stops being told to Need healer gear.
 
 ## Features
 
-- **Setup window** (`/rl`, or right-click the minimap button): pick your talent spec and fighting style (2H melee, 1H melee, Bow, Any ranged, Caster), off-meta included. The style decides which weapons you NEED (a 2H fighter greeds one-handers and shields). Race and class come from your character.
+- **Setup window** (`/rl`, or right-click the minimap button): pick your talent spec and your fighting styles from a dropdown (2H melee, 1H melee, Bow, Any ranged, Caster; tick as many as you use), off-meta included. The styles decide which weapons you NEED (a 2H-only fighter greeds one-handers and shields; tick both 2H and 1H to take either). With styles of different roles (melee and caster), gear gets the best verdict among them. Race and class come from your character.
 - **Dungeon role**: Tank, DPS or Healer (with role icons), used inside dungeons and raids, for example a Retribution paladin who tanks dungeons. DPS means your fighting style.
 - **Role outside dungeons**: Tank, DPS or Healer while questing. Usually the same as your dungeon role; pick a different one only if you really want gear judged differently out in the world.
 - **Highlights**: a colored NEED / GREED / PASS border on the loot window and roll popups, NEED on the best quest reward (or, with no upgrade, SELL on the choice that sells best at a vendor, or AH when Auctionator or TradeSkillMaster prices say the auction house pays more), and NEED on upgrades sitting in your bags.

@@ -312,6 +312,7 @@ Fire("PLAYER_LOGIN")
 local settings = RoleLootFrame
 check(settings and settings.shown, "settings open on first login")
 check(RoleLootDB.role == "melee2h" and RoleLootDB.dungeonRole == "healer", "old Healer role: a style, healer in dungeons")
+check(RoleLootDB.styles.melee2h, "the old single style becomes the style list")
 check(ns.SOURCES[1018] and ns.SOURCES[1018][1] == "Some Boss", "items learned before are listed")
 local function Labels(buttons)
     local labels = {}
@@ -330,6 +331,13 @@ check(settings.roleButtons[1].textures[1].texture == "Interface\\Icons\\INV_Axe_
 Click(settings.specButtons[3]) -- Retribution
 check(RoleLootDB.spec == 3 and RoleLootDB.role == "melee2h" and RoleLootDB.dungeonRole == nil,
     "Retribution picks 2H melee, DPS in dungeons")
+-- Fighting styles: a dropdown of toggles.
+check(not settings.styleList.shown and settings.styleMenu.text:find("2H melee", 1, true), "style dropdown closed, shows 2H melee")
+Click(settings.styleMenu)
+check(settings.styleList.shown and settings.roleButtons[1].check.shown and not settings.roleButtons[2].check.shown,
+    "dropdown open: 2H melee ticked")
+Click(settings.roleButtons[1])
+check(RoleLootDB.styles.melee2h and RoleLootDB.role == "melee2h", "the last style can't be unticked")
 check(settings.dungeonButtons[1].locked, "DPS highlighted")
 
 local function Tip(id)
@@ -354,10 +362,14 @@ check(GameTooltip.roleLootOutline.shown and GameTooltip.roleLootOutline.sides[1]
     "PASS tooltip: thick red outline")
 Expect(1005, "GREED", "Not your best armor type")
 Expect(1006, "GREED", "You fight with a two-hander")
-Click(settings.roleButtons[2]) -- 1H melee
-check(not Tip(1006):find("You fight", 1, true), "1H melee takes one-handers")
+Click(settings.roleButtons[2]) -- and 1H melee
+check(settings.styleMenu.text:find("2H melee, 1H melee", 1, true), "dropdown shows both styles")
+check(not Tip(1006):find("You fight", 1, true), "2H and 1H melee: one-handers welcome")
+check(not Tip(1007):find("You fight", 1, true), "2H and 1H melee: two-handers welcome")
+Click(settings.roleButtons[1]) -- 1H melee only
 Expect(1007, "GREED", "You fight one-handed")
-Click(settings.roleButtons[1]) -- back to 2H melee
+Click(settings.roleButtons[1]) -- 2H melee back
+Click(settings.roleButtons[2]) -- 1H melee off
 Expect(1007, "NEED", "racial weapon")
 Expect(1009, "NEED", "wear at level 35")
 -- Untrained weapon skill: scored 30% lower, with where to learn it.
@@ -389,9 +401,13 @@ T.kind = "raid"
 Expect(1001, "NEED", "(Retribution, Healer)")
 T.kind = "none"
 Expect(1001, "PASS", "you play Melee")
-Click(settings.roleButtons[5]) -- Caster
+Click(settings.roleButtons[5]) -- and Caster
+Expect(1002, "NEED", "(Retribution, Melee)") -- (the best answer among your styles)
+Click(settings.roleButtons[1]) -- Caster only
 Expect(1002, "(Retribution, Caster)", "")
 Click(settings.roleButtons[1])
+Click(settings.roleButtons[5])
+check(RoleLootDB.role == "melee2h" and not RoleLootDB.styles.caster, "back to 2H melee only")
 Click(settings.dungeonButtons[1]) -- DPS
 check(RoleLootDB.dungeonRole == nil, "DPS clears the dungeon role")
 -- Role outside dungeons: its own choice (a tank who quests as a tank).

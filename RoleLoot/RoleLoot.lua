@@ -273,6 +273,21 @@ local function ActiveRole()
     return role ~= "dps" and role or STYLE_ROLE[db.role]
 end
 
+-- Your fighting styles, several allowed (db.styles); db.role is the first of them.
+local function StyleList()
+    local list = {}
+    for _, s in ipairs(STYLES) do
+        if db.styles and db.styles[s] then list[#list + 1] = s end
+    end
+    return list
+end
+
+local function StyleText()
+    local labels = {}
+    for _, s in ipairs(StyleList()) do labels[#labels + 1] = STYLE_LABEL[s] end
+    return labels[1] and table.concat(labels, ", ") or "none"
+end
+
 -- Whether `class` can wear an item at `level` (and why not), and whether it is
 -- a lower armor type than the class's best then (a Ret paladin's leather).
 local function CanUse(class, equipLoc, classID, subclassID, level)
@@ -299,13 +314,12 @@ end
 -- role, also its score and that of what you wear in its slot. `atLevel`: the
 -- level you'd wear it at (the BiS list's items ahead of you), for armor types.
 local SaleValue -- (below, with the quest rewards)
-local function Verdict(link, atLevel)
-    if not (db and db.role and link) then return end
+local function VerdictAs(link, atLevel, role)
     local _, _, _, equipLoc, _, classID, subclassID = GetInstant(link)
     if not SLOTS[equipLoc] then return end
     local stats = GetStats(link)
     if not stats then return end
-    local class, role = player.class, ActiveRole()
+    local class, styles = player.class, db.styles or {}
     local usable, why, lowArmor = CanUse(class, equipLoc, classID, subclassID, math.max(UnitLevel("player"), atLevel or 0))
     -- No use to you: GREED when a vendor pays for it, PASS only when it's worth nothing.
     local function NoUse(reason)
@@ -317,16 +331,17 @@ local function Verdict(link, atLevel)
 
     local score, off = Fit(stats, equipLoc, classID == 2 and subclassID == 19, role, class)
     if off then return NoUse(ROLE_LABEL[off] .. " gear, you play " .. ROLE_LABEL[role]) end
-    -- Weapons that don't fit your style (as damage dealer; tanks and healers take any).
+    -- Weapons that don't fit your styles (as damage dealer; tanks and healers take any).
     local melee = classID == 2 and not RANGED_LOC[equipLoc] and subclassID ~= 19
-    if role == "melee" and db.role == "melee2h"
+    if role == "melee" and styles.melee2h and not styles.melee1h
         and (equipLoc == "INVTYPE_SHIELD" or (melee and not TWO_HAND_SUBCLASS[subclassID])) then
         return "GREED", "You fight with a two-hander"
     end
-    if role == "melee" and db.role == "melee1h" and melee and TWO_HAND_SUBCLASS[subclassID] then
+    if role == "melee" and styles.melee1h and not styles.melee2h and melee and TWO_HAND_SUBCLASS[subclassID] then
         return "GREED", "You fight one-handed"
     end
-    if role == "ranged" and db.role == "rangedbow" and classID == 2 and RANGED_LOC[equipLoc] and subclassID ~= 2 then
+    if role == "ranged" and styles.rangedbow and not styles.ranged
+        and classID == 2 and RANGED_LOC[equipLoc] and subclassID ~= 2 then
         return "GREED", "You use a bow"
     end
     if score <= 0 then return "GREED", "Nothing useful for " .. ROLE_LABEL[role] end
@@ -362,12 +377,40 @@ local function Verdict(link, atLevel)
     return "GREED", "Not an upgrade" .. notes, score, worn
 end
 
+-- VerdictAs for the role you play now: tank or healer, or with several fighting
+-- styles the best answer among their roles (melee and caster: a caster upgrade is NEED).
+-- Also returns that role, after VerdictAs's answers.
+local RANK = { NEED = 3, GREED = 2, PASS = 1 }
+local function Verdict(link, atLevel)
+    if not (db and db.role and link) then return end
+    local _, kind = IsInInstance()
+    local fixed = (kind == "party" or kind == "raid") and db.dungeonRole or db.worldRole
+    local roles, seen = {}, {}
+    if fixed and fixed ~= "dps" then
+        roles[1] = fixed
+    else
+        for _, s in ipairs(StyleList()) do
+            if not seen[STYLE_ROLE[s]] then seen[STYLE_ROLE[s]] = true roles[#roles + 1] = STYLE_ROLE[s] end
+        end
+    end
+    local best
+    for _, role in ipairs(roles) do
+        local r = { VerdictAs(link, atLevel, role) }
+        if r[1] and (not best or RANK[r[1]] > RANK[best[1]]
+            or (r[1] == best[1] and (r[3] or 0) > (best[3] or 0))) then
+            r[6] = role
+            best = r
+        end
+    end
+    if best then return unpack(best, 1, 6) end
+end
+
 local COLOR = { NEED = "|cff20ff20", GREED = "|cffffd200", PASS = "|cffff4040" }
 local function VerdictText(link)
-    local verdict, reason = Verdict(link)
+    local verdict, reason, _, _, _, role = Verdict(link)
     if verdict then
         return COLOR[verdict] .. verdict .. "|r |cffaaaaaa" .. reason .. " (" .. SpecName() .. ", "
-            .. ROLE_LABEL[ActiveRole()] .. ")|r", verdict
+            .. ROLE_LABEL[role] .. ")|r", verdict
     end
 end
 
@@ -381,8 +424,11 @@ local function Refresh()
             if db.spec == i then b:LockHighlight() else b:UnlockHighlight() end
         end
         for _, b in ipairs(frame.roleButtons) do
-            if db.role == b.role then b:LockHighlight() else b:UnlockHighlight() end
+            local on = db.styles and db.styles[b.role]
+            if on then b:LockHighlight() else b:UnlockHighlight() end
+            b.check:SetShown(on and true or false)
         end
+        frame.styleMenu:SetText(StyleText() .. "  |TInterface\\Buttons\\Arrow-Down-Up:14|t")
         for _, b in ipairs(frame.dungeonButtons) do
             if db.dungeonRole == b.role then b:LockHighlight() else b:UnlockHighlight() end
         end
@@ -479,7 +525,7 @@ local function SetupText()
     local client, build = GetBuildInfo()
     return string.format("RoleLoot %s, client %s (%s), %s %s level %d, %s, role %s, dungeons %s, outside %s",
         version, client or "?", build or "?", player.raceName, player.className, UnitLevel("player"), SpecName(),
-        STYLE_LABEL[db.role] or "none", ROLE_LABEL[db.dungeonRole or "dps"], ROLE_LABEL[db.worldRole or "dps"])
+        StyleText(), ROLE_LABEL[db.dungeonRole or "dps"], ROLE_LABEL[db.worldRole or "dps"])
 end
 
 -- A read-only text box at y in `f`, holding `text`, selected when clicked.
@@ -538,16 +584,38 @@ local function OpenSettings()
         f.specButtons[i] = Button(f, s[1], 100, 14 + (i - 1) * 104, -76, function()
             -- (the spec's own style and role, in dungeons and out)
             db.spec, db.role, db.dungeonRole, db.worldRole = i, s[2], s[3], s[3] or "dps"
+            db.styles = { [s[2]] = true }
         end)
     end
 
     local role = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     role:SetPoint("TOPLEFT", 14, -110)
-    role:SetText("Fighting style (when your role is DPS; off-meta welcome):")
+    role:SetText("Fighting styles (when your role is DPS; pick one or more, off-meta welcome):")
+    -- A dropdown: the button shows your styles, its list toggles each one (one stays picked).
+    local list = CreateFrame("Frame", nil, f)
+    list:SetFrameLevel(f:GetFrameLevel() + 20) -- (over the rows below it)
+    list:SetSize(136, 8 + #STYLES * 26)
+    list:SetPoint("TOPLEFT", 14, -150)
+    list:EnableMouse(true)
+    local listBg = list:CreateTexture(nil, "BACKGROUND")
+    listBg:SetAllPoints()
+    listBg:SetColorTexture(0.05, 0.05, 0.05, 0.95)
+    list:Hide()
+    f.styleList = list
+    f.styleMenu = Button(f, "", 250, 14, -126, function() list:SetShown(not list:IsShown()) end)
+    f:HookScript("OnHide", function() list:Hide() end)
     f.roleButtons = {}
     for i, r in ipairs(STYLES) do
-        local b = Button(f, STYLE_LABEL[r], 100, 14 + (i - 1) * 104, -126, function() db.role = r end, r)
+        local b = Button(list, STYLE_LABEL[r], 128, 4, -4 - (i - 1) * 26, function()
+            local on = not db.styles[r]
+            if on or #StyleList() > 1 then db.styles[r] = on or nil end
+            db.role = StyleList()[1]
+        end, r)
         b.role = r
+        b.check = b:CreateTexture(nil, "OVERLAY")
+        b.check:SetSize(16, 16)
+        b.check:SetPoint("RIGHT", -6, 0)
+        b.check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
         f.roleButtons[i] = b
     end
 
@@ -1384,7 +1452,7 @@ local function MinimapButton()
     b:SetScript("OnEnter", function()
         GameTooltip:SetOwner(b, "ANCHOR_LEFT")
         GameTooltip:AddLine("RoleLoot")
-        GameTooltip:AddLine(SpecName() .. ", " .. (STYLE_LABEL[db.role] or "no style picked"), 1, 1, 1)
+        GameTooltip:AddLine(SpecName() .. ", " .. (db.role and StyleText() or "no style picked"), 1, 1, 1)
         GameTooltip:AddLine("In dungeons: " .. ROLE_LABEL[db.dungeonRole or "dps"], 1, 1, 1)
         GameTooltip:AddLine("Outside: " .. ROLE_LABEL[db.worldRole or "dps"], 1, 1, 1)
         GameTooltip:AddLine("Left-click: BiS list   Right-click: settings   Drag: move", 0.6, 0.6, 0.6)
@@ -1478,6 +1546,8 @@ events:SetScript("OnEvent", function(_, event, rollID)
             db.role = (db.role == "ranged" or db.role == "caster") and db.role or (spec and spec[2]) or "melee2h"
         end
         if db.dungeonRole ~= "tank" and db.dungeonRole ~= "healer" then db.dungeonRole = nil end
+        -- Before 0.11 one fighting style (db.role); now several.
+        db.styles = db.styles or (db.role and { [db.role] = true }) or {}
         player.raceName, player.race = UnitRace("player")
         player.faction = UnitFactionGroup("player")
         RoleLootLearned = RoleLootLearned or {}
