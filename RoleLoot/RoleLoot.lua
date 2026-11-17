@@ -320,7 +320,9 @@ local function VerdictAs(link, atLevel, role)
     local stats = GetStats(link)
     if not stats then return end
     local class, styles = player.class, db.styles or {}
-    local usable, why, lowArmor = CanUse(class, equipLoc, classID, subclassID, math.max(UnitLevel("player"), atLevel or 0))
+    local minLevel = select(5, GetInfo(link)) or 0
+    -- Armor types by the level you can wear the item at (a paladin's level 40 plate is theirs).
+    local usable, why, lowArmor = CanUse(class, equipLoc, classID, subclassID, math.max(UnitLevel("player"), atLevel or 0, minLevel))
     -- No use to you: GREED when a vendor pays for it, PASS only when it's worth nothing.
     local function NoUse(reason)
         local value, where = SaleValue(link)
@@ -351,7 +353,6 @@ local function VerdictAs(link, atLevel, role)
     local untrained = classID == 2 and Untrained(subclassID)
     if untrained then score = score * UNTRAINED end
     -- Notes: a skill to train first, a level to wait for (not in the BiS list, which shows levels).
-    local minLevel = select(5, GetInfo(link)) or 0
     local later = not atLevel and minLevel > UnitLevel("player") and minLevel or nil
     local notes = (racial and ", racial weapon" or "") .. (untrained and ", train " .. untrained .. " (weapon master)" or "")
         .. (later and ", wear at level " .. later or "")

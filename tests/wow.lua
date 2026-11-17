@@ -352,13 +352,16 @@ end
 Expect(1001, "PASS", "Healer gear, you play Melee")
 Expect(1002, "NEED", "Upgrade +")
 Expect(1003, "GREED", "Not an upgrade")
-Expect(1004, "PASS", "can't wear this armor")
-check(GameTooltip.border[1] == 1 and GameTooltip.border[2] == 0.25 and Tip(1004):find("Pass-Up", 1, true),
+-- Level 40 plate at level 30: a paladin wears it then, so it is judged as plate, not "can't wear".
+Expect(1004, "NEED", "wear at level 40")
+Item(1041, "Low Plate Helm", "INVTYPE_HEAD", 4, 4, 20, S { STRENGTH = 10, ARMOR = 300 })
+Expect(1041, "PASS", "can't wear this armor")
+check(GameTooltip.border[1] == 1 and GameTooltip.border[2] == 0.25 and Tip(1001):find("Pass-Up", 1, true),
     "PASS tooltip: red border and the cross icon")
 check(GameTooltipTextRight1.shown and GameTooltipTextRight1.text:find("PASS", 1, true), "PASS header beside the item name")
 for _, f in ipairs(GameTooltip.hooks.OnTooltipCleared) do f(GameTooltip) end
 check(GameTooltip.border[2] == 1 and not GameTooltip.roleLootOutline.shown, "cleared tooltip: border back to normal")
-Tip(1004)
+Tip(1001)
 check(GameTooltip.roleLootOutline.shown and GameTooltip.roleLootOutline.sides[1].SetColorTextureArgs[2] == 0.25,
     "PASS tooltip: thick red outline")
 -- A lower armor type: NEED while it beats what you wear (hands empty), GREED once you wear better.
