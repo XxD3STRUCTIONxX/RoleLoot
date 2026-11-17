@@ -368,8 +368,9 @@ local function VerdictAs(link, atLevel, role)
     if SLOTS[equipLoc][1] == 17 and worn <= 0 and mainHand and select(4, GetInstant(mainHand)) == "INVTYPE_2HWEAPON" then
         worn = LinkScore(mainHand, role, class)
     end
-    -- (scored still, so the BiS list can show it as a lower-armor upgrade)
-    if lowArmor then return "GREED", "Not your best armor type", score, worn end
+    -- A lower armor type (a warrior's leather) is NEED only while it beats what you wear (cloth).
+    if lowArmor and not IsUpgrade(score, worn) then return "GREED", "Not your best armor type", score, worn end
+    if lowArmor then notes = notes .. ", lower armor type" end
     if IsUpgrade(score, worn) then
         local gain = worn > 0 and string.format("Upgrade +%d%%", math.floor((score / worn - 1) * 100)) or "Upgrade (slot empty)"
         return "NEED", gain .. notes, score, worn, later
@@ -428,7 +429,7 @@ local function Refresh()
             if on then b:LockHighlight() else b:UnlockHighlight() end
             b.check:SetShown(on and true or false)
         end
-        frame.styleMenu:SetText(StyleText() .. "  |TInterface\\Buttons\\Arrow-Down-Up:14|t")
+        frame.styleMenu:SetText(StyleText() .. "  |TInterface\\Buttons\\Arrow-Down-Up:14:14:0:-5|t") -- (the arrow sits in the texture's top half)
         for _, b in ipairs(frame.dungeonButtons) do
             if db.dungeonRole == b.role then b:LockHighlight() else b:UnlockHighlight() end
         end
@@ -833,7 +834,7 @@ local function Pick()
             if score and (upgrade or (db.sort == "best" and not db.upgradesOnly)) then
                 groups[g] = groups[g] or {}
                 tinsert(groups[g], { link = link, icon = icon, score = score, worn = worn, upgrade = upgrade,
-                                     lowArmor = verdict == "GREED" and reason == "Not your best armor type",
+                                     lowArmor = reason:find("armor type", 1, true) ~= nil,
                                      minLevel = level, src = src, price = db.ahOnly and AHPrice(link) })
             end
         end

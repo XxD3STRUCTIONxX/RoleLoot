@@ -284,7 +284,8 @@ Item(1023, "Frayed Bracers", "INVTYPE_WRIST", 4, 1, 1, S { ARMOR = 4 })
 Item(1024, "Bent Large Shield", "INVTYPE_SHIELD", 4, 6, 1, S { ARMOR = 32 })
 Item(1025, "Flimsy Chain Belt", "INVTYPE_WAIST", 4, 3, 1, S { ARMOR = 24 })
 Item(1026, "Painted Chain Belt", "INVTYPE_WAIST", 4, 3, 1, S { ARMOR = 38 })
-T.equipped = { [5] = 1003, [16] = 1010, [9] = 1014 }
+Item(1040, "Mail Gauntlets", "INVTYPE_HAND", 4, 3, 25, S { STRENGTH = 10, ARMOR = 120 })
+T.equipped = { [5] = 1003, [16] = 1010, [9] = 1014, [10] = 1040 }
 
 ---------------------------------------------------------------- load the addon
 
@@ -360,7 +361,11 @@ check(GameTooltip.border[2] == 1 and not GameTooltip.roleLootOutline.shown, "cle
 Tip(1004)
 check(GameTooltip.roleLootOutline.shown and GameTooltip.roleLootOutline.sides[1].SetColorTextureArgs[2] == 0.25,
     "PASS tooltip: thick red outline")
+-- A lower armor type: NEED while it beats what you wear (hands empty), GREED once you wear better.
 Expect(1005, "GREED", "Not your best armor type")
+T.equipped[10] = nil
+Expect(1005, "NEED", "lower armor type")
+T.equipped[10] = 1040
 Expect(1006, "GREED", "You fight with a two-hander")
 Click(settings.roleButtons[2]) -- and 1H melee
 check(settings.styleMenu.text:find("2H melee, 1H melee", 1, true), "dropdown shows both styles")
