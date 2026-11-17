@@ -124,6 +124,8 @@ function UnitClass() return "Paladin", "PALADIN" end
 function UnitRace() return "Human", "Human" end
 function UnitFactionGroup() return "Alliance" end
 function UnitLevel() return T.level end
+T.untrained = {} -- weapon skill spells you haven't learned
+function IsPlayerSpell(id) return not T.untrained[id] end
 function IsInInstance() return T.kind ~= "none", T.kind end
 -- (an item the game forgot: a link without its name, as the game gives)
 function GetInventoryItemLink(_, slot)
@@ -279,6 +281,9 @@ Item(1021, "Quest Epic Helm", "INVTYPE_HEAD", 4, 3, 0, S { STRENGTH = 30 })
 ITEMS[1021].ilvl = 65
 Item(1022, "Level 55 Boots", "INVTYPE_FEET", 4, 4, 55, S { STRENGTH = 30 })
 Item(1023, "Frayed Bracers", "INVTYPE_WRIST", 4, 1, 1, S { ARMOR = 4 })
+Item(1024, "Bent Large Shield", "INVTYPE_SHIELD", 4, 6, 1, S { ARMOR = 32 })
+Item(1025, "Flimsy Chain Belt", "INVTYPE_WAIST", 4, 3, 1, S { ARMOR = 24 })
+Item(1026, "Painted Chain Belt", "INVTYPE_WAIST", 4, 3, 1, S { ARMOR = 38 })
 T.equipped = { [5] = 1003, [16] = 1010, [9] = 1014 }
 
 ---------------------------------------------------------------- load the addon
@@ -354,6 +359,11 @@ check(not Tip(1006):find("You fight", 1, true), "1H melee takes one-handers")
 Expect(1007, "GREED", "You fight one-handed")
 Click(settings.roleButtons[1]) -- back to 2H melee
 Expect(1007, "NEED", "racial weapon")
+Expect(1009, "NEED", "wear at level 35")
+-- Untrained weapon skill: scored 30% lower, with where to learn it.
+T.untrained[202] = true -- Two-Handed Swords
+Expect(1007, "NEED", "train Two-Handed Swords (weapon master)")
+T.untrained[202] = nil
 Expect(1008, "PASS", "can't use this weapon")
 Expect(1011, "NEED", "slot empty")
 Expect(1012, "PASS", "Healer gear")
@@ -393,6 +403,11 @@ Expect(1013, "NEED", "(Retribution, Tank)")
 T.equipped[9] = 1023
 Expect(1015, "NEED", "(Retribution, Tank)")
 T.equipped[9] = 1014
+-- A shield beside the worn two-hander: weighed against that two-hander, not an empty slot.
+Expect(1024, "GREED", "Not an upgrade")
+T.equipped[6] = 1025 -- 38 armor over 24, no other stats
+Expect(1026, "NEED", "Upgrade +")
+T.equipped[6] = nil
 Click(settings.worldButtons[1]) -- back to DPS
 Expect(1013, "PASS", "Tank gear")
 Click(settings.specButtons[2]) -- Protection: tank in dungeons and out
@@ -465,6 +480,10 @@ T.quest = { 1001, 1011, 1002 }
 ShowQuest(T.quest)
 local tiles = QuestInfoFrame.rewardsFrame.RewardButtons
 check(MarkOf(tiles[3]) == "NEED" and not MarkOf(tiles[1]) and not MarkOf(tiles[2]), "quest: best reward marked only")
+-- A bigger upgrade you can't wear until level 35 loses to one you can wear now.
+T.quest = { 1009, 1002, 1001 }
+ShowQuest(T.quest)
+check(MarkOf(tiles[2]) == "NEED" and not MarkOf(tiles[1]), "quest: wearable now beats a bigger one for later")
 -- No upgrade: the best-selling choice gets SELL, or AH when Auctionator says it's worth more there.
 ITEMS[1003].sell, ITEMS[1005].sell, ITEMS[1012].sell = 200, 500, 100
 T.quest = { 1003, 1005, 1012 }

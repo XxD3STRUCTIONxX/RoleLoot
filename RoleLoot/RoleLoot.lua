@@ -183,6 +183,28 @@ end
 
 local GetItemStats = (C_Item and C_Item.GetItemStats) or GetItemStats
 local GetInstant = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+local GetInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+
+-- Weapon subclass -> its weapon skill (spell) and name. A skill you haven't
+-- learned costs a trip to a weapon master (10s) and starts at 1: many misses.
+local WEAPON_SKILL = {
+    [0] = { 196, "One-Handed Axes" }, [1] = { 197, "Two-Handed Axes" }, [2] = { 264, "Bows" },
+    [3] = { 266, "Guns" }, [4] = { 198, "One-Handed Maces" }, [5] = { 199, "Two-Handed Maces" },
+    [6] = { 200, "Polearms" }, [7] = { 201, "One-Handed Swords" }, [8] = { 202, "Two-Handed Swords" },
+    [10] = { 227, "Staves" }, [13] = { 15590, "Fist Weapons" }, [15] = { 1180, "Daggers" },
+    [16] = { 2567, "Thrown" }, [18] = { 5011, "Crossbows" }, [19] = { 5009, "Wands" },
+}
+-- shortcut: a flat 30% off for an untrained weapon, whatever its gain; tune if it misjudges.
+local UNTRAINED = 0.7
+-- The weapon skill `subclassID` needs, when you haven't learned it; nil when you have
+-- (or the game can't tell: it knows none of them).
+local function Untrained(subclassID)
+    local skill = WEAPON_SKILL[subclassID]
+    if not (skill and IsPlayerSpell) or IsPlayerSpell(skill[1]) then return end
+    for _, s in pairs(WEAPON_SKILL) do
+        if IsPlayerSpell(s[1]) then return skill[2] end
+    end
+end
 
 -- An item's tooltip lines (text): the game's tooltip data, else a hidden tooltip.
 local scanner
@@ -265,11 +287,11 @@ local function CanUse(class, equipLoc, classID, subclassID, level)
     return true, nil, isArmor and subclassID <= 4 and subclassID < bestArmor
 end
 
--- Better than what you wear, by enough to matter: 1% and 1 point (half a
--- Strength), so 3 more armor alone is no upgrade. Any use for an empty slot is,
--- and so is double the worth (25 armor over 4, on bracers with no other stats).
+-- Better than what you wear, by enough to matter: 1%, and 1 point (half a
+-- Strength) or 10%, so 3 more armor on stat gear is no upgrade but 38 armor
+-- over 24 (belts with no other stats) is. Any use for an empty slot is.
 local function IsUpgrade(score, worn)
-    return worn <= 0 and score > 0 or (score > worn * 1.01 and (score - worn >= 1 or score >= worn * 2))
+    return worn <= 0 and score > 0 or (score > worn * 1.01 and (score - worn >= 1 or score >= worn * 1.1))
 end
 
 -- "NEED" / "GREED" / "PASS" and why, for item `link`; nil when it isn't gear
@@ -311,6 +333,13 @@ local function Verdict(link, atLevel)
 
     local racial = classID == 2 and RACIAL_WEAPONS[player.race] and RACIAL_WEAPONS[player.race][subclassID]
     if racial then score = score * RACIAL_BONUS end
+    local untrained = classID == 2 and Untrained(subclassID)
+    if untrained then score = score * UNTRAINED end
+    -- Notes: a skill to train first, a level to wait for (not in the BiS list, which shows levels).
+    local minLevel = select(5, GetInfo(link)) or 0
+    local later = not atLevel and minLevel > UnitLevel("player") and minLevel or nil
+    local notes = (racial and ", racial weapon" or "") .. (untrained and ", train " .. untrained .. " (weapon master)" or "")
+        .. (later and ", wear at level " .. later or "")
 
     -- Compare with what you wear there: the weaker ring/trinket, both hands for a two-hander.
     local worn
@@ -319,13 +348,18 @@ local function Verdict(link, atLevel)
         worn = worn and math.min(worn, s) or s
     end
     if equipLoc == "INVTYPE_2HWEAPON" then worn = worn + LinkScore(GetInventoryItemLink("player", 17), role, class) end
+    -- An off-hand (shield) beside a two-hander means putting that two-hander away.
+    local mainHand = GetInventoryItemLink("player", 16)
+    if SLOTS[equipLoc][1] == 17 and worn <= 0 and mainHand and select(4, GetInstant(mainHand)) == "INVTYPE_2HWEAPON" then
+        worn = LinkScore(mainHand, role, class)
+    end
     -- (scored still, so the BiS list can show it as a lower-armor upgrade)
     if lowArmor then return "GREED", "Not your best armor type", score, worn end
     if IsUpgrade(score, worn) then
         local gain = worn > 0 and string.format("Upgrade +%d%%", math.floor((score / worn - 1) * 100)) or "Upgrade (slot empty)"
-        return "NEED", gain .. (racial and ", racial weapon" or ""), score, worn
+        return "NEED", gain .. notes, score, worn, later
     end
-    return "GREED", "Not an upgrade", score, worn
+    return "GREED", "Not an upgrade" .. notes, score, worn
 end
 
 local COLOR = { NEED = "|cff20ff20", GREED = "|cffffd200", PASS = "|cffff4040" }
@@ -573,7 +607,6 @@ local PER_GROUP = 3 -- items shown per slot group
 local MAX_AHEAD = 20
 local ROW_HEIGHT = 20
 local SORTS = { { "best", "Best for me" }, { "next", "Next upgrades" } }
-local GetInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
 
 local bis -- the window
 local OpenSearch -- (below)
@@ -1216,15 +1249,19 @@ local function PaintQuest()
         local name = questFrame:GetName()
         for i = 1, 10 do tiles[i] = name and _G[name .. "QuestInfoItem" .. i] or nil end
     end
-    local best, bestScore
+    local best, bestScore, bestLater
     local cash, cashValue, cashWhere = nil, 0, nil -- (no upgrade: the choice that sells best)
     for _, tile in pairs(tiles) do
         MarkAs(tile, nil)
         if tile:IsShown() and (tile.objectType == nil or tile.objectType == "item")
             and (tile.type == "choice" or tile.type == "reward") then
             local link = TileLink(tile)
-            local verdict, _, score = Verdict(link)
-            if verdict == "NEED" and (not bestScore or score > bestScore) then best, bestScore = tile, score end
+            local verdict, _, score, _, later = Verdict(link)
+            -- (an upgrade you can wear now beats a bigger one for later)
+            if verdict == "NEED" and (not best or (bestLater and not later)
+                or (not bestLater == not later and score > bestScore)) then
+                best, bestScore, bestLater = tile, score, later
+            end
             if tile.type == "choice" and link then
                 local value, where = SaleValue(link)
                 if value > cashValue then cash, cashValue, cashWhere = tile, value, where end
