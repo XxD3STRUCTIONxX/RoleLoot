@@ -234,7 +234,8 @@ end
 
 ---------------------------------------------------------------- verdict
 
-local db -- RoleLootDB: { spec = index, role = a fighting style, dungeonRole = "tank"/"healer" (nil: damage), ... }
+local db -- RoleLootDB: { spec = index, role = a fighting style, dungeonRole = "tank"/"healer" (nil: damage),
+--          worldRole = "dps"/"tank"/"healer" outside dungeons (nil: not picked yet, damage), ... }
 local player = {}
 
 local function SpecName()
@@ -246,7 +247,8 @@ end
 -- dungeon role (a Ret paladin who tanks them).
 local function ActiveRole()
     local _, kind = IsInInstance()
-    return (kind == "party" or kind == "raid") and db.dungeonRole or STYLE_ROLE[db.role]
+    local role = (kind == "party" or kind == "raid") and db.dungeonRole or db.worldRole
+    return role ~= "dps" and role or STYLE_ROLE[db.role]
 end
 
 -- Whether `class` can wear an item at `level` (and why not), and whether it is
@@ -264,9 +266,10 @@ local function CanUse(class, equipLoc, classID, subclassID, level)
 end
 
 -- Better than what you wear, by enough to matter: 1% and 1 point (half a
--- Strength), so 3 more armor alone is no upgrade. Any use for an empty slot is.
+-- Strength), so 3 more armor alone is no upgrade. Any use for an empty slot is,
+-- and so is double the worth (25 armor over 4, on bracers with no other stats).
 local function IsUpgrade(score, worn)
-    return worn <= 0 and score > 0 or (score > worn * 1.01 and score - worn >= 1)
+    return worn <= 0 and score > 0 or (score > worn * 1.01 and (score - worn >= 1 or score >= worn * 2))
 end
 
 -- "NEED" / "GREED" / "PASS" and why, for item `link`; nil when it isn't gear
@@ -348,6 +351,9 @@ local function Refresh()
         end
         for _, b in ipairs(frame.dungeonButtons) do
             if db.dungeonRole == b.role then b:LockHighlight() else b:UnlockHighlight() end
+        end
+        for _, b in ipairs(frame.worldButtons) do
+            if db.worldRole == b.role then b:LockHighlight() else b:UnlockHighlight() end
         end
     end
     BuildList()
@@ -437,9 +443,9 @@ local function SetupText()
     local meta = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
     local version = meta and meta("RoleLoot", "Version") or "?"
     local client, build = GetBuildInfo()
-    return string.format("RoleLoot %s, client %s (%s), %s %s level %d, %s, role %s, dungeons %s",
+    return string.format("RoleLoot %s, client %s (%s), %s %s level %d, %s, role %s, dungeons %s, outside %s",
         version, client or "?", build or "?", player.raceName, player.className, UnitLevel("player"), SpecName(),
-        STYLE_LABEL[db.role] or "none", ROLE_LABEL[db.dungeonRole or "dps"])
+        STYLE_LABEL[db.role] or "none", ROLE_LABEL[db.dungeonRole or "dps"], ROLE_LABEL[db.worldRole or "dps"])
 end
 
 -- A read-only text box at y in `f`, holding `text`, selected when clicked.
@@ -483,7 +489,7 @@ end
 
 local function OpenSettings()
     if frame then Toggle(frame) Refresh() return end
-    local f = NewWindow("RoleLootFrame", "RoleLoot", 544, 270) -- (5 style buttons, 100 wide)
+    local f = NewWindow("RoleLootFrame", "RoleLoot", 544, 334) -- (5 style buttons, 100 wide)
     Toggle(f)
     frame = f
     local who = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -496,13 +502,14 @@ local function OpenSettings()
     f.specButtons = {}
     for i, s in ipairs(SPECS[player.class]) do
         f.specButtons[i] = Button(f, s[1], 100, 14 + (i - 1) * 104, -76, function()
-            db.spec, db.role, db.dungeonRole = i, s[2], s[3] -- (the spec's own style and dungeon role)
+            -- (the spec's own style and role, in dungeons and out)
+            db.spec, db.role, db.dungeonRole, db.worldRole = i, s[2], s[3], s[3] or "dps"
         end)
     end
 
     local role = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     role:SetPoint("TOPLEFT", 14, -110)
-    role:SetText("Fighting style (questing, and dungeons as DPS; off-meta welcome):")
+    role:SetText("Fighting style (when your role is DPS; off-meta welcome):")
     f.roleButtons = {}
     for i, r in ipairs(STYLES) do
         local b = Button(f, STYLE_LABEL[r], 100, 14 + (i - 1) * 104, -126, function() db.role = r end, r)
@@ -521,10 +528,25 @@ local function OpenSettings()
         f.dungeonButtons[i] = b
     end
 
-    Button(f, "BiS list", 110, 420, -208, function() OpenBis() end)
-    Button(f, "Bug / feedback", 110, 420, -236, function() OpenBug() end)
+    local world = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    world:SetPoint("TOPLEFT", 14, -210)
+    world:SetText("Role outside dungeons (questing):")
+    f.worldButtons = {}
+    for i, r in ipairs(DUNGEON_ROLES) do
+        local b = Button(f, ROLE_LABEL[r], 100, 14 + (i - 1) * 104, -226, function() db.worldRole = r end, r)
+        b.role = r
+        f.worldButtons[i] = b
+    end
+    local note = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    note:SetPoint("TOPLEFT", 330, -224)
+    note:SetWidth(200)
+    note:SetJustifyH("LEFT")
+    note:SetText("Should match your dungeon role, unless you really want gear judged differently while questing.")
+
+    Button(f, "BiS list", 110, 420, -272, function() OpenBis() end)
+    Button(f, "Bug / feedback", 110, 420, -300, function() OpenBug() end)
     local hint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    hint:SetPoint("TOPLEFT", 14, -214)
+    hint:SetPoint("TOPLEFT", 14, -278)
     hint:SetWidth(270)
     hint:SetJustifyH("LEFT")
     hint:SetText("Hover gear or roll on loot to see Need / Greed / Pass. /rl search: every item.")
@@ -1327,6 +1349,7 @@ local function MinimapButton()
         GameTooltip:AddLine("RoleLoot")
         GameTooltip:AddLine(SpecName() .. ", " .. (STYLE_LABEL[db.role] or "no style picked"), 1, 1, 1)
         GameTooltip:AddLine("In dungeons: " .. ROLE_LABEL[db.dungeonRole or "dps"], 1, 1, 1)
+        GameTooltip:AddLine("Outside: " .. ROLE_LABEL[db.worldRole or "dps"], 1, 1, 1)
         GameTooltip:AddLine("Left-click: BiS list   Right-click: settings   Drag: move", 0.6, 0.6, 0.6)
         GameTooltip:Show()
     end)
@@ -1425,8 +1448,12 @@ events:SetScript("OnEvent", function(_, event, rollID)
         MinimapButton()
         HookMarks()
         C_Timer.After(5, RequestBis) -- (so the BiS list is ready when opened)
+        if db.worldRole ~= "tank" and db.worldRole ~= "healer" and db.worldRole ~= "dps" then db.worldRole = nil end
         if not db.spec then
             print("|cff20ff20RoleLoot|r: pick your spec and role (/rl).")
+            OpenSettings()
+        elseif not db.worldRole then -- (saves from before 0.10.6: make them choose)
+            print("|cff20ff20RoleLoot|r: new setting, pick your role outside dungeons (/rl).")
             OpenSettings()
         end
     elseif event == "LOOT_OPENED" then

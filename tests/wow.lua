@@ -278,6 +278,7 @@ Item(1020, "Rare Mob Shoulders", "INVTYPE_SHOULDER", 4, 3, 25, S { STRENGTH = 5 
 Item(1021, "Quest Epic Helm", "INVTYPE_HEAD", 4, 3, 0, S { STRENGTH = 30 })
 ITEMS[1021].ilvl = 65
 Item(1022, "Level 55 Boots", "INVTYPE_FEET", 4, 4, 55, S { STRENGTH = 30 })
+Item(1023, "Frayed Bracers", "INVTYPE_WRIST", 4, 1, 1, S { ARMOR = 4 })
 T.equipped = { [5] = 1003, [16] = 1010, [9] = 1014 }
 
 ---------------------------------------------------------------- load the addon
@@ -358,6 +359,9 @@ Expect(1011, "NEED", "slot empty")
 Expect(1012, "PASS", "Healer gear")
 Expect(1013, "PASS", "Tank gear")
 Expect(1015, "GREED", "Not an upgrade") -- (was "Upgrade +13%")
+T.equipped[9] = 1023 -- 25 armor over 4, no other stats: an upgrade even as Melee
+Expect(1015, "NEED", "Upgrade +")
+T.equipped[9] = 1014
 T.equipped[16] = 1007
 Expect(1016, "NEED", "Upgrade +")
 T.equipped[16] = 1010
@@ -380,11 +384,26 @@ Expect(1002, "(Retribution, Caster)", "")
 Click(settings.roleButtons[1])
 Click(settings.dungeonButtons[1]) -- DPS
 check(RoleLootDB.dungeonRole == nil, "DPS clears the dungeon role")
+-- Role outside dungeons: its own choice (a tank who quests as a tank).
+check(RoleLootDB.worldRole == "dps" and settings.worldButtons[1].locked, "Retribution: DPS outside dungeons")
+check(Labels(settings.worldButtons) == "DPS,Tank,Healer", "outside labels: " .. Labels(settings.worldButtons))
+Click(settings.worldButtons[2]) -- Tank
+check(RoleLootDB.worldRole == "tank", "Tank outside saved")
+Expect(1013, "NEED", "(Retribution, Tank)")
+T.equipped[9] = 1023
+Expect(1015, "NEED", "(Retribution, Tank)")
+T.equipped[9] = 1014
+Click(settings.worldButtons[1]) -- back to DPS
+Expect(1013, "PASS", "Tank gear")
+Click(settings.specButtons[2]) -- Protection: tank in dungeons and out
+check(RoleLootDB.dungeonRole == "tank" and RoleLootDB.worldRole == "tank", "Protection: tank everywhere")
+Click(settings.specButtons[3]) -- back to Retribution
 
 -- Minimap tooltip and clicks.
 RoleLootMinimapButton.scripts.OnEnter()
 local tip = table.concat(GameTooltip.lines, "|")
-check(tip:find("2H melee", 1, true) and tip:find("In dungeons: DPS", 1, true), "minimap tooltip: " .. tip)
+check(tip:find("2H melee", 1, true) and tip:find("In dungeons: DPS", 1, true)
+    and tip:find("Outside: DPS", 1, true), "minimap tooltip: " .. tip)
 Click(RoleLootMinimapButton, "RightButton")
 check(not settings.shown, "right-click toggles settings")
 
