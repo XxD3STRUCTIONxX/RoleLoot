@@ -419,7 +419,7 @@ end
 ---------------------------------------------------------------- settings window
 
 local frame
-local BuildList, OpenBis, BuildSearch, RefreshMarks -- (the BiS and search windows and highlights, below)
+local BuildList, OpenBis, BuildSearch, RefreshMarks, BuildTracker -- (the windows and highlights, below)
 local function Refresh()
     if frame then
         for i, b in ipairs(frame.specButtons) do
@@ -441,6 +441,7 @@ local function Refresh()
     BuildList()
     BuildSearch()
     RefreshMarks()
+    BuildTracker()
 end
 
 -- A button at x, y of `parent`; `onClick` gets the mouse button; `role`: a role icon before its text.
@@ -691,6 +692,7 @@ local function BuildSoon()
         BuildList()
         BuildSearch()
         RefreshMarks()
+        BuildTracker()
     end)
 end
 
@@ -855,7 +857,7 @@ end
 local function Row(win, i)
     if win.rows[i] then return win.rows[i] end
     local row = CreateFrame("Button", nil, win.content)
-    row:SetSize(bis.content:GetWidth(), ROW_HEIGHT)
+    row:SetSize(win.content:GetWidth(), ROW_HEIGHT)
     row:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_HEIGHT)
     row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
     row.icon = row:CreateTexture(nil, "ARTWORK")
@@ -1397,10 +1399,215 @@ local function HookMarks()
     end
 end
 
+---------------------------------------------------------------- dungeon tracker
+
+-- Inside a dungeon or raid: the run's time, XP and XP an hour, and the drops of
+-- the boss you target (before that, every boss's) with their verdicts. The run
+-- (db.run) goes on while you're out (a corpse run) and ends when you enter
+-- another dungeon or click New run.
+local tracker
+local lastXP, lastMax
+local function InDungeon()
+    local _, kind = IsInInstance()
+    return kind == "party" or kind == "raid"
+end
+local function Thousands(n)
+    local s, k = tostring(math.floor(n)), 0
+    repeat s, k = s:gsub("^(%d+)(%d%d%d)", "%1,%2") until k == 0
+    return s
+end
+local function Summary()
+    local r, secs = db.run, math.max(0, time() - db.run.start)
+    local clock = secs >= 3600 and string.format("%d:%02d:%02d", math.floor(secs / 3600), math.floor(secs / 60) % 60, secs % 60)
+        or string.format("%d:%02d", math.floor(secs / 60), secs % 60)
+    return string.format("%s   %s   %s XP (%s an hour)", r.zone, clock, Thousands(r.xp),
+        Thousands(r.xp / math.max(secs, 60) * 3600))
+end
+
+local function StartRun()
+    if db.run then print("|cff20ff20RoleLoot|r run done: " .. Summary()) end
+    db.run = { zone = GetInstanceInfo(), start = time(), xp = 0 }
+end
+
+-- XP since the last update (a level-up: the rest of the old level, then the new one's).
+local function CountXP()
+    local xp, max = UnitXP("player"), UnitXPMax("player")
+    if db.run and lastXP and InDungeon() then
+        db.run.xp = db.run.xp + (xp >= lastXP and xp - lastXP or lastMax - lastXP + xp)
+    end
+    lastXP, lastMax = xp, max
+end
+
+-- The run's dungeon's drops: { boss = { item ids } } and the bosses in order (trash last).
+local function ZoneDrops(zone)
+    local bosses, order = {}, {}
+    for id, src in pairs(ns.SOURCES) do
+        if src[2] == zone and (not src[4] or src[4] == player.faction) then
+            if not bosses[src[1]] then bosses[src[1]], order[#order + 1] = {}, src[1] end
+            tinsert(bosses[src[1]], id)
+        end
+    end
+    table.sort(order, function(a, b)
+        if (a == "Trash Drops") ~= (b == "Trash Drops") then return b == "Trash Drops" end
+        return a < b
+    end)
+    return bosses, order
+end
+
+BuildTracker = function()
+    if not (tracker and tracker:IsShown() and db.run) then return end
+    tracker.stats:SetText(Summary())
+    local bosses, order = ZoneDrops(db.run.zone)
+    local show = bosses[db.run.boss or ""] and { db.run.boss } or order
+    local n = 0
+    for _, boss in ipairs(show) do
+        n = n + 1
+        Put(tracker, n, "|cffffd200" .. boss .. "|r")
+        local items = {}
+        for _, id in ipairs(bosses[boss]) do
+            asked[id] = true -- (GET_ITEM_INFO_RECEIVED rebuilds the list)
+            local _, link = GetInfo(id)
+            local verdict, reason
+            if link then verdict, reason = Verdict(link) end
+            if verdict then items[#items + 1] = { link = link, verdict = verdict, reason = reason } end
+        end
+        table.sort(items, function(a, b)
+            if a.verdict ~= b.verdict then return RANK[a.verdict] > RANK[b.verdict] end
+            return a.link < b.link
+        end)
+        for _, e in ipairs(items) do
+            n = n + 1
+            Put(tracker, n, e.link, e.link, COLOR[e.verdict] .. e.verdict .. "|r |cffaaaaaa" .. e.reason .. "|r",
+                select(5, GetInstant(e.link)))
+        end
+    end
+    EndRows(tracker, n)
+    tracker.hint:SetText(order[1] and (db.run.boss and bosses[db.run.boss] and "Drops of " .. db.run.boss
+        .. ". Target another boss for its drops." or "Target a boss to see only its drops.")
+        or "No drops listed for " .. db.run.zone .. ".")
+end
+
+local function OpenTracker()
+    if not tracker then
+        tracker = NewWindow("RoleLootDungeonFrame", "RoleLoot dungeon run", 520, 320)
+        tracker:SetFrameStrata("MEDIUM") -- (stays open while you play: below bags and dialogs)
+        tracker:SetPoint("RIGHT", -60, 0)
+        tracker.stats = tracker:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        tracker.stats:SetPoint("TOPLEFT", 14, -36)
+        tracker.hint = tracker:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        tracker.hint:SetPoint("TOPLEFT", 14, -58)
+        Button(tracker, "New run", 80, 426, -31, function()
+            if InDungeon() then StartRun() else print("|cff20ff20RoleLoot|r run done: " .. Summary()) db.run = nil tracker:Hide() end
+        end)
+        List(tracker, -76)
+        local wait = 0
+        tracker:SetScript("OnUpdate", function(_, elapsed) -- (the clock, once a second)
+            wait = wait - elapsed
+            if wait <= 0 and db.run then wait = 1 tracker.stats:SetText(Summary()) end
+        end)
+    end
+    tracker:Show()
+    BuildTracker()
+end
+
+-- In or out of a dungeon: start or go on with the run, or hide the window outside.
+local function OnZone()
+    if InDungeon() then
+        if not db.run or db.run.zone ~= GetInstanceInfo() then StartRun() end
+        lastXP, lastMax = UnitXP("player"), UnitXPMax("player")
+        OpenTracker()
+    elseif db.run and tracker and tracker:IsShown() then
+        tracker:Hide()
+        print("|cff20ff20RoleLoot|r run so far: " .. Summary() .. " (it goes on when you go back in).")
+    end
+end
+
+-- Targeting one of the dungeon's bosses shows its drops.
+local function OnTarget()
+    local name = db.run and InDungeon() and Plain(UnitName("target"))
+    if name and name ~= db.run.boss and ZoneDrops(db.run.zone)[name] then
+        db.run.boss = name
+        BuildTracker()
+    end
+end
+
+---------------------------------------------------------------- selling gear
+
+-- At a vendor, a button sells the gear in your bags that RoleLoot says GREED or
+-- PASS for in every role you play (dungeons, outside, each fighting style), once
+-- you confirm. Not epics, and 12 at most: the vendor's Buyback tab holds 12.
+local UseBagItem = (C_Container and C_Container.UseContainerItem) or UseContainerItem
+local BagSlots = (C_Container and C_Container.GetContainerNumSlots) or GetContainerNumSlots
+local BUYBACK = 12
+
+local function Keep(link)
+    local roles = {}
+    for _, r in ipairs({ db.dungeonRole or "", db.worldRole or "" }) do
+        if r == "tank" or r == "healer" then roles[r] = true end
+    end
+    for _, s in ipairs(StyleList()) do roles[STYLE_ROLE[s]] = true end
+    if not next(roles) then return true end
+    for role in pairs(roles) do
+        local verdict = VerdictAs(link, nil, role)
+        if not verdict or verdict == "NEED" then return true end -- (nil: not gear, or not loaded)
+    end
+end
+
+local function SellList()
+    local list, total = {}, 0
+    for bag = 0, NUM_BAG_SLOTS or 4 do
+        for slot = 1, BagSlots(bag) or 0 do
+            local link = #list < BUYBACK and GetBagLink(bag, slot)
+            local _, _, quality, _, _, _, _, _, _, _, price = GetInfo(link or 0)
+            -- (not what the AH pays more for: the BiS list's AH mark)
+            if link and (quality or 9) <= 3 and (price or 0) > 0 and select(2, SaleValue(link)) ~= "AH" and not Keep(link) then
+                list[#list + 1] = { bag = bag, slot = slot, link = link }
+                total = total + price
+            end
+        end
+    end
+    return list, total
+end
+
+local function Sell(list)
+    local sold = 0
+    for _, e in ipairs(list) do
+        -- (only at the vendor: anywhere else using a bag item equips it)
+        if MerchantFrame:IsShown() and GetBagLink(e.bag, e.slot) == e.link then
+            UseBagItem(e.bag, e.slot)
+            sold = sold + 1
+        end
+    end
+    print("|cff20ff20RoleLoot|r sold " .. sold .. " items (Buyback tab to undo).")
+end
+
+local function ConfirmSell()
+    local list, total = SellList()
+    if not list[1] then print("|cff20ff20RoleLoot|r: no gear to sell.") return end
+    local links = {}
+    for i, e in ipairs(list) do links[i] = e.link end
+    StaticPopupDialogs.ROLELOOT_SELL = StaticPopupDialogs.ROLELOOT_SELL or {
+        text = "%s", button1 = "Sell", button2 = CANCEL or "Cancel", timeout = 0, whileDead = true, hideOnEscape = true,
+        OnAccept = function(_, data) Sell(data) end,
+    }
+    StaticPopup_Show("ROLELOOT_SELL", "RoleLoot: sell these for " .. Money(total) .. "?\n\n" .. table.concat(links, "\n")
+        .. "\n\nYou can buy them back on the vendor's Buyback tab.", nil, list)
+end
+
+local sellButton
+local function OnMerchant()
+    if sellButton or not MerchantFrame then return end
+    sellButton = Button(MerchantFrame, "Sell unneeded gear", 150, 0, 0, ConfirmSell)
+    sellButton:ClearAllPoints()
+    sellButton:SetPoint("TOPLEFT", MerchantFrame, "TOPRIGHT", 2, -30)
+end
+
 SLASH_ROLELOOT1, SLASH_ROLELOOT2 = "/rl", "/roleloot"
 SlashCmdList.ROLELOOT = function(msg)
     msg = msg and msg:lower() or ""
     if msg:match("bis") then OpenBis() elseif msg:match("search") then OpenSearch()
+    elseif msg:match("run") or msg:match("dungeon") then
+        if db.run then OpenTracker() else print("|cff20ff20RoleLoot|r: no dungeon run yet.") end
     elseif msg:match("bug") or msg:match("feedback") then OpenBug() else OpenSettings() end
 end
 RoleLoot_OnAddonCompartmentClick = function() OpenBis() end -- (the .toc's addon-list button)
@@ -1533,7 +1740,10 @@ events:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 events:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 events:RegisterEvent("PLAYER_LEVEL_UP")
 events:RegisterEvent("LOOT_OPENED")
-events:RegisterEvent("PLAYER_ENTERING_WORLD") -- (in or out of a dungeon: the dungeon role)
+events:RegisterEvent("PLAYER_ENTERING_WORLD") -- (in or out of a dungeon: the dungeon role, the run)
+events:RegisterEvent("PLAYER_XP_UPDATE")
+events:RegisterEvent("PLAYER_TARGET_CHANGED")
+events:RegisterEvent("MERCHANT_SHOW")
 events:SetScript("OnEvent", function(_, event, rollID)
     if event == "PLAYER_LOGIN" then
         RoleLootDB = RoleLootDB or {}
@@ -1575,7 +1785,16 @@ events:SetScript("OnEvent", function(_, event, rollID)
         if text then print("|cff20ff20RoleLoot|r " .. link .. ": " .. text) end
     elseif event == "GET_ITEM_INFO_RECEIVED" then
         if asked[rollID] then BuildSoon() end -- (rollID: the item; others are the game's own)
-    elseif db then
+    elseif not db then
+        return
+    elseif event == "PLAYER_XP_UPDATE" then
+        CountXP()
+    elseif event == "PLAYER_TARGET_CHANGED" then
+        OnTarget()
+    elseif event == "MERCHANT_SHOW" then
+        OnMerchant()
+    else
+        if event == "PLAYER_ENTERING_WORLD" then OnZone() end
         BuildSoon() -- (new gear, level or zone: verdicts change)
     end
 end)

@@ -138,12 +138,21 @@ function GetLootSourceInfo() return T.lootSource end
 function UnitGUID() return T.target and T.target.guid end
 function UnitName() return T.target and T.target.name end
 function UnitClassification() return T.target and T.target.class end
-function GetInstanceInfo() return "Blackrock Depths" end
+function GetInstanceInfo() return T.instance or "Blackrock Depths" end
 function GetRealZoneText() return "Searing Gorge" end
 function GetLootRollItemLink(id) return Link(T.rolls[id]) end
 function GetQuestItemLink(_, i) return Link(T.quest[i]) end
 function GetQuestLogItemLink(_, i) return Link((T.questLog or {})[i]) end
-C_Container = { GetContainerItemLink = function(_, slot) return Link(T.bags[slot]) end }
+USED = {} -- bag slots used (sold at a vendor)
+C_Container = { GetContainerItemLink = function(bag, slot) return bag == 0 and Link(T.bags[slot]) or nil end,
+                GetContainerNumSlots = function(bag) return bag == 0 and 3 or 0 end,
+                UseContainerItem = function(_, slot) USED[#USED + 1] = T.bags[slot] end }
+T.xp, T.xpMax = 0, 5000
+function UnitXP() return T.xp end
+function UnitXPMax() return T.xpMax end
+function time() return math.floor(T.time) end
+StaticPopupDialogs = {}
+function StaticPopup_Show(which, text, _, data) POPUP = { which = which, text = text, data = data } end
 function GetTime() return T.time end
 function GetBuildInfo() return "1.16.0", "60001" end
 C_AddOns = { GetAddOnMetadata = function(_, key) return key == "Version" and "test" or nil end }
@@ -640,6 +649,64 @@ search.all.checked = false
 Click(search.all)
 for _ = 1, 5 do Click(search.class) end
 check(search.class.text == "Class: Mage" and not In(1002) and not In(1007), "a mage can't wear mail or swing greatswords")
+
+-- Dungeon tracker: entering starts a run with time, XP and the drops.
+T.instance, T.kind, T.xp = "Test Dungeon", "party", 1000
+Fire("PLAYER_ENTERING_WORLD")
+local run = RoleLootDungeonFrame
+check(run and run.shown and RoleLootDB.run.zone == "Test Dungeon", "entering a dungeon starts a run")
+T.xp = 1500 Fire("PLAYER_XP_UPDATE")
+T.xp, T.xpMax = 300, 6000 Fire("PLAYER_XP_UPDATE") -- (a level-up: 3500 to finish the old level, then 300)
+check(RoleLootDB.run.xp == 4300, "XP counted across a level-up: " .. RoleLootDB.run.xp)
+T.time = T.time + 1800
+run.scripts.OnUpdate(run, 1)
+check(run.stats.text == "Test Dungeon   30:00   4,300 XP (8,600 an hour)", "run stats: " .. tostring(run.stats.text))
+local function RunRows()
+    local out = {}
+    for _, row in ipairs(run.rows) do if row.shown then out[#out + 1] = row.name.text .. "|" .. row.info.text end end
+    return out
+end
+local function Heads()
+    local n = 0
+    for _, r in ipairs(RunRows()) do if r:find("Boss ", 1, true) and not r:find("Hitem", 1, true) then n = n + 1 end end
+    return n
+end
+check(Heads() > 5 and run.hint.text == "Target a boss to see only its drops.", "no boss targeted: every boss's drops")
+T.target = { name = "Boss 1002" } Fire("PLAYER_TARGET_CHANGED")
+local rows = RunRows()
+check(#rows == 2 and rows[1]:find("Boss 1002", 1, true) and rows[2]:find("Strong Mail Chest", 1, true)
+    and rows[2]:find("NEED", 1, true), "boss targeted: its drops with verdicts: " .. table.concat(rows, " / "))
+T.target = { name = "Some Wolf" } Fire("PLAYER_TARGET_CHANGED")
+check(#RunRows() == 2, "a mob that isn't a boss keeps the boss's drops")
+T.kind, T.target = "none", nil Fire("PLAYER_ENTERING_WORLD")
+check(not run.shown and RoleLootDB.run and printed[#printed]:find("run so far", 1, true), "leaving hides the run, kept")
+T.kind = "party" Fire("PLAYER_ENTERING_WORLD")
+check(run.shown and RoleLootDB.run.xp == 4300, "back in: the same run")
+T.instance = "Late Dungeon" Fire("PLAYER_ENTERING_WORLD")
+check(RoleLootDB.run.zone == "Late Dungeon" and RoleLootDB.run.xp == 0 and printed[#printed]:find("run done", 1, true),
+    "another dungeon: a new run")
+T.kind = "none" Fire("PLAYER_ENTERING_WORLD")
+RunTimers()
+
+-- Selling gear: GREED and PASS in every role you play, after confirming, only at the vendor.
+RoleLootDB.styles, RoleLootDB.dungeonRole, RoleLootDB.worldRole = { melee2h = true }, nil, "dps"
+for _, id in ipairs({ 1001, 1002, 1003 }) do ITEMS[id].sell = 500 end
+T.bags = { 1001, 1002, 1003 }
+MerchantFrame = New("Frame", "MerchantFrame")
+Fire("MERCHANT_SHOW")
+Click(ButtonOf(MerchantFrame, "Sell unneeded gear"))
+check(POPUP and POPUP.text:find("Healer Robe", 1, true) and POPUP.text:find("Worn Mail Chest", 1, true)
+    and not POPUP.text:find("Strong Mail", 1, true), "sell asks first, upgrades kept: " .. tostring(POPUP and POPUP.text))
+MerchantFrame.shown = false
+StaticPopupDialogs.ROLELOOT_SELL.OnAccept(nil, POPUP.data)
+check(#USED == 0, "nothing used once the vendor is closed (it would equip it)")
+MerchantFrame.shown = true
+StaticPopupDialogs.ROLELOOT_SELL.OnAccept(nil, POPUP.data)
+check(#USED == 2 and USED[1] == 1001 and USED[2] == 1003, "sold the robe and the worn chest")
+RoleLootDB.dungeonRole, POPUP = "healer", nil
+Click(ButtonOf(MerchantFrame, "Sell unneeded gear"))
+check(not POPUP.text:find("Healer Robe", 1, true), "a healer in dungeons keeps the healer robe")
+RoleLootDB.dungeonRole = nil
 
 -- Bug / feedback window: the issues link and your setup, read-only.
 SlashCmdList.ROLELOOT("bug")
