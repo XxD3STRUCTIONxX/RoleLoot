@@ -1538,7 +1538,10 @@ OpenTracker = function()
         tracker.hint = tracker:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
         tracker.hint:SetPoint("TOPLEFT", 14, -58)
         Button(tracker, "New run", 80, 426, -31, function()
-            if InDungeon() then StartRun() else print("|cff20ff20RoleLoot|r run done: " .. Summary()) db.run = nil tracker:Hide() end
+            if InDungeon() then StartRun() return end
+            if db.run then print("|cff20ff20RoleLoot|r run done: " .. Summary()) end -- (none: opened with Move)
+            db.run = nil
+            tracker:Hide()
         end)
         List(tracker, -76)
         local wait = 0
