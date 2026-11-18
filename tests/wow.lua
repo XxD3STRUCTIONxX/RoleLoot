@@ -65,6 +65,7 @@ for _, m in ipairs({ "SetLooping", "SetFromAlpha", "SetToAlpha", "SetDuration", 
     Widget[m] = Widget[m] or function(self, ...) self[m .. "Args"] = { ... } end
 end
 function Widget:GetCenter() return 500, 500 end
+function Widget:GetPoint() return unpack(self.SetPointArgs or {}) end
 function Widget:GetEffectiveScale() return 1 end
 
 local frames = {}
@@ -693,6 +694,25 @@ ns.SOURCES[1040] = { "Captain Greenskin", "The Deadmines", 20 }
 T.instance = "Deadmines" Fire("PLAYER_ENTERING_WORLD")
 check(RunRows()[1] and RunRows()[1]:find("Captain Greenskin", 1, true), "Deadmines drops found under The Deadmines")
 ns.SOURCES[1040] = nil
+T.kind = "none" Fire("PLAYER_ENTERING_WORLD")
+RunTimers()
+-- Settings: move it (the spot is kept), turn it off.
+check(settings.trackerCheck.checked, "tracker on in the settings")
+Click(ButtonOf(settings, "Move"))
+check(run.shown, "Move shows the tracker to drag")
+run:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 40, -80)
+run.scripts.OnDragStop(run)
+check(RoleLootDB.trackerPos and RoleLootDB.trackerPos[3] == 40 and RoleLootDB.trackerPos[4] == -80, "dragged: position saved")
+Click(ButtonOf(settings, "Reset position"))
+check(RoleLootDB.trackerPos == nil and run.SetPointArgs[1] == "RIGHT", "reset position")
+run:Hide()
+settings.trackerCheck.checked = false
+Click(settings.trackerCheck)
+T.kind = "party" Fire("PLAYER_ENTERING_WORLD")
+check(not run.shown and RoleLootDB.run == nil and RoleLootDB.trackerOff, "tracker off: no run, no window")
+settings.trackerCheck.checked = true
+Click(settings.trackerCheck)
+check(run.shown and RoleLootDB.run and not RoleLootDB.trackerOff, "turned on inside a dungeon: the run starts")
 T.kind = "none" Fire("PLAYER_ENTERING_WORLD")
 RunTimers()
 

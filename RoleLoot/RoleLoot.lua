@@ -419,7 +419,8 @@ end
 ---------------------------------------------------------------- settings window
 
 local frame
-local BuildList, OpenBis, BuildSearch, RefreshMarks, BuildTracker -- (the windows and highlights, below)
+local BuildList, OpenBis, BuildSearch, RefreshMarks, BuildTracker, OpenTracker, OnZone -- (the windows and highlights, below)
+local tracker -- (the dungeon tracker window, below)
 local function Refresh()
     if frame then
         for i, b in ipairs(frame.specButtons) do
@@ -437,6 +438,7 @@ local function Refresh()
         for _, b in ipairs(frame.worldButtons) do
             if db.worldRole == b.role then b:LockHighlight() else b:UnlockHighlight() end
         end
+        frame.trackerCheck:SetChecked(not db.trackerOff)
     end
     BuildList()
     BuildSearch()
@@ -572,7 +574,7 @@ end
 
 local function OpenSettings()
     if frame then Toggle(frame) Refresh() return end
-    local f = NewWindow("RoleLootFrame", "RoleLoot", 544, 334) -- (5 style buttons, 100 wide)
+    local f = NewWindow("RoleLootFrame", "RoleLoot", 544, 364) -- (5 style buttons, 100 wide)
     Toggle(f)
     frame = f
     local who = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -648,10 +650,32 @@ local function OpenSettings()
     note:SetJustifyH("LEFT")
     note:SetText("Should match your dungeon role, unless you really want gear judged differently while questing.")
 
-    Button(f, "BiS list", 110, 420, -272, function() OpenBis() end)
-    Button(f, "Bug / feedback", 110, 420, -300, function() OpenBug() end)
+    -- Dungeon tracker: on or off, and where it sits (Move shows it to drag around).
+    f.trackerCheck = CreateFrame("CheckButton", nil, f, "UICheckButtonTemplate")
+    f.trackerCheck:SetSize(22, 22)
+    f.trackerCheck:SetPoint("TOPLEFT", 10, -262)
+    f.trackerCheck:SetScript("OnClick", function(b)
+        db.trackerOff = not b:GetChecked() or nil
+        if db.trackerOff then
+            db.run = nil
+            if tracker then tracker:Hide() end
+        else
+            OnZone()
+        end
+    end)
+    local trackerLabel = f.trackerCheck:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    trackerLabel:SetPoint("LEFT", f.trackerCheck, "RIGHT", 2, 0)
+    trackerLabel:SetText("Dungeon tracker (time, XP, boss drops)")
+    Button(f, "Move", 70, 250, -262, function() OpenTracker() end)
+    Button(f, "Reset position", 110, 324, -262, function()
+        db.trackerPos = nil
+        if tracker then tracker:ClearAllPoints() tracker:SetPoint("RIGHT", -60, 0) end
+    end)
+
+    Button(f, "BiS list", 110, 420, -302, function() OpenBis() end)
+    Button(f, "Bug / feedback", 110, 420, -330, function() OpenBug() end)
     local hint = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    hint:SetPoint("TOPLEFT", 14, -278)
+    hint:SetPoint("TOPLEFT", 14, -308)
     hint:SetWidth(270)
     hint:SetJustifyH("LEFT")
     hint:SetText("Hover gear or roll on loot to see Need / Greed / Pass. /rl search: every item.")
@@ -1404,8 +1428,7 @@ end
 -- Inside a dungeon or raid: the run's time, XP and XP an hour, and the drops of
 -- the boss you target (before that, every boss's) with their verdicts. The run
 -- (db.run) goes on while you're out (a corpse run) and ends when you enter
--- another dungeon or click New run.
-local tracker
+-- another dungeon or click New run. Off in the settings (db.trackerOff); dragged, it stays there (db.trackerPos).
 local lastXP, lastMax
 local function InDungeon()
     local _, kind = IsInInstance()
@@ -1459,7 +1482,12 @@ local function ZoneDrops(zone)
 end
 
 BuildTracker = function()
-    if not (tracker and tracker:IsShown() and db.run) then return end
+    if not (tracker and tracker:IsShown()) then return end
+    if not db.run then -- (opened from the settings to move it)
+        tracker.stats:SetText("No dungeon run yet")
+        tracker.hint:SetText("Drag this window where you want it.")
+        return EndRows(tracker, 0)
+    end
     tracker.stats:SetText(Summary())
     local bosses, order = ZoneDrops(db.run.zone)
     local show = bosses[db.run.boss or ""] and { db.run.boss } or order
@@ -1491,14 +1519,20 @@ BuildTracker = function()
         or "No drops listed for " .. db.run.zone .. ".")
 end
 
-local function OpenTracker()
+OpenTracker = function()
     if not tracker then
         tracker = NewWindow("RoleLootDungeonFrame", "RoleLoot dungeon run", 520, 320)
         -- (not closed by Escape, pressed all the time in a dungeon, nor a window others open beside)
         tremove(UISpecialFrames)
         tremove(windows)
         tracker:SetFrameStrata("MEDIUM") -- (stays open while you play: below bags and dialogs)
-        tracker:SetPoint("RIGHT", -60, 0)
+        local pos = db.trackerPos
+        if pos then tracker:SetPoint(pos[1], UIParent, pos[2], pos[3], pos[4]) else tracker:SetPoint("RIGHT", -60, 0) end
+        tracker:SetScript("OnDragStop", function(f)
+            f:StopMovingOrSizing()
+            local point, _, relative, x, y = f:GetPoint()
+            db.trackerPos = { point, relative, x, y }
+        end)
         tracker.stats = tracker:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         tracker.stats:SetPoint("TOPLEFT", 14, -36)
         tracker.hint = tracker:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
@@ -1518,8 +1552,8 @@ local function OpenTracker()
 end
 
 -- In or out of a dungeon: start or go on with the run, or hide the window outside.
-local function OnZone()
-    if InDungeon() then
+OnZone = function()
+    if InDungeon() and not db.trackerOff then
         if not db.run or db.run.zone ~= GetInstanceInfo() then StartRun() end
         lastXP, lastMax = UnitXP("player"), UnitXPMax("player")
         OpenTracker()
@@ -1617,7 +1651,7 @@ SlashCmdList.ROLELOOT = function(msg)
     msg = msg and msg:lower() or ""
     if msg:match("bis") then OpenBis() elseif msg:match("search") then OpenSearch()
     elseif msg:match("run") or msg:match("dungeon") then
-        if db.run then OpenTracker() else print("|cff20ff20RoleLoot|r: no dungeon run yet.") end
+        OpenTracker()
     elseif msg:match("bug") or msg:match("feedback") then OpenBug() else OpenSettings() end
 end
 RoleLoot_OnAddonCompartmentClick = function() OpenBis() end -- (the .toc's addon-list button)
