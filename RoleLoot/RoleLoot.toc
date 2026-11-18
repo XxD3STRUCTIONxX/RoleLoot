@@ -2,7 +2,7 @@
 ## Title: RoleLoot
 ## Notes: Need / Greed / Pass advice and a BiS list for your class, spec, role and race. /rl to set up, /rl bis for the list, /rl search for every item.
 ## Author: XxD3STRUCTIONxX
-## Version: 0.12.0
+## Version: 0.12.1
 ## X-License: All Rights Reserved (item data: wow-classic-items, MIT; Forever Mastery, with permission; Everloot, everloot.app, CC BY-SA 4.0)
 ## SavedVariables: RoleLootLearned
 ## SavedVariablesPerCharacter: RoleLootDB

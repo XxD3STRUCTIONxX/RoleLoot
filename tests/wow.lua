@@ -2,7 +2,7 @@
 -- a level 30 Human Retribution paladin looting, questing and browsing the BiS list.
 unpack = unpack or table.unpack
 math.atan2 = math.atan2 or math.atan
-tinsert = table.insert
+tinsert, tremove = table.insert, table.remove
 
 local fails, passes = {}, 0
 local function check(ok, what)
@@ -110,7 +110,7 @@ C_Item = {
         local id = IdOf(x); local i = ITEMS[id]
         ASKED[id] = true
         if i and not FORGOTTEN[id] then
-            return i.name, Link(id), 2, i.ilvl or 30, i.minLevel, nil, nil, nil, nil, nil, i.sell or 0
+            return i.name, Link(id), i.quality or 2, i.ilvl or 30, i.minLevel, nil, nil, nil, nil, nil, i.sell or 0
         end
     end,
 }
@@ -145,7 +145,7 @@ function GetQuestItemLink(_, i) return Link(T.quest[i]) end
 function GetQuestLogItemLink(_, i) return Link((T.questLog or {})[i]) end
 USED = {} -- bag slots used (sold at a vendor)
 C_Container = { GetContainerItemLink = function(bag, slot) return bag == 0 and Link(T.bags[slot]) or nil end,
-                GetContainerNumSlots = function(bag) return bag == 0 and 3 or 0 end,
+                GetContainerNumSlots = function(bag) return bag == 0 and #T.bags or 0 end,
                 UseContainerItem = function(_, slot) USED[#USED + 1] = T.bags[slot] end }
 T.xp, T.xpMax = 0, 5000
 function UnitXP() return T.xp end
@@ -685,12 +685,23 @@ check(run.shown and RoleLootDB.run.xp == 4300, "back in: the same run")
 T.instance = "Late Dungeon" Fire("PLAYER_ENTERING_WORLD")
 check(RoleLootDB.run.zone == "Late Dungeon" and RoleLootDB.run.xp == 0 and printed[#printed]:find("run done", 1, true),
     "another dungeon: a new run")
+local escapes = false
+for _, n in ipairs(UISpecialFrames) do escapes = escapes or n == "RoleLootDungeonFrame" end
+check(not escapes, "Escape doesn't close the run window")
+-- The game's "Deadmines" is the item list's "The Deadmines".
+ns.SOURCES[1040] = { "Captain Greenskin", "The Deadmines", 20 }
+T.instance = "Deadmines" Fire("PLAYER_ENTERING_WORLD")
+check(RunRows()[1] and RunRows()[1]:find("Captain Greenskin", 1, true), "Deadmines drops found under The Deadmines")
+ns.SOURCES[1040] = nil
 T.kind = "none" Fire("PLAYER_ENTERING_WORLD")
 RunTimers()
 
 -- Selling gear: GREED and PASS in every role you play, after confirming, only at the vendor.
 RoleLootDB.styles, RoleLootDB.dungeonRole, RoleLootDB.worldRole = { melee2h = true }, nil, "dps"
-for _, id in ipairs({ 1001, 1002, 1003 }) do ITEMS[id].sell = 500 end
+Item(1042, "Strong Fishing Pole", "INVTYPE_2HWEAPON", 2, 20, 10, S { DPS = 5 })
+Item(1043, "White Mail Chest", "INVTYPE_CHEST", 4, 3, 10, S { ARMOR = 50 })
+ITEMS[1043].quality = 1
+for _, id in ipairs({ 1001, 1002, 1003, 1042, 1043 }) do ITEMS[id].sell = 500 end
 T.bags = { 1001, 1002, 1003 }
 MerchantFrame = New("Frame", "MerchantFrame")
 Fire("MERCHANT_SHOW")
@@ -703,6 +714,10 @@ check(#USED == 0, "nothing used once the vendor is closed (it would equip it)")
 MerchantFrame.shown = true
 StaticPopupDialogs.ROLELOOT_SELL.OnAccept(nil, POPUP.data)
 check(#USED == 2 and USED[1] == 1001 and USED[2] == 1003, "sold the robe and the worn chest")
+T.bags, POPUP = { 1042, 1043 }, nil
+Click(ButtonOf(MerchantFrame, "Sell unneeded gear"))
+check(not POPUP and printed[#printed]:find("no gear to sell", 1, true), "fishing poles and white gear are never sold")
+T.bags = { 1001, 1002, 1003 }
 RoleLootDB.dungeonRole, POPUP = "healer", nil
 Click(ButtonOf(MerchantFrame, "Sell unneeded gear"))
 check(not POPUP.text:find("Healer Robe", 1, true), "a healer in dungeons keeps the healer robe")

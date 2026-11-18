@@ -1426,7 +1426,7 @@ end
 
 local function StartRun()
     if db.run then print("|cff20ff20RoleLoot|r run done: " .. Summary()) end
-    db.run = { zone = GetInstanceInfo(), start = time(), xp = 0 }
+    db.run = { zone = GetInstanceInfo() or "?", start = time(), xp = 0 }
 end
 
 -- XP since the last update (a level-up: the rest of the old level, then the new one's).
@@ -1438,11 +1438,15 @@ local function CountXP()
     lastXP, lastMax = xp, max
 end
 
+-- The game's dungeon names that the item list spells differently (as make_forever.py's ALIAS).
+local ZONE_ALIAS = { ["Deadmines"] = "The Deadmines", ["Stormwind Stockade"] = "The Stockade",
+                     ["Sunken Temple"] = "The Temple of Atal'Hakkar", ["Ahn'Qiraj Temple"] = "Ahn'Qiraj" }
+
 -- The run's dungeon's drops: { boss = { item ids } } and the bosses in order (trash last).
 local function ZoneDrops(zone)
     local bosses, order = {}, {}
     for id, src in pairs(ns.SOURCES) do
-        if src[2] == zone and (not src[4] or src[4] == player.faction) then
+        if (src[2] == zone or src[2] == ZONE_ALIAS[zone]) and (not src[4] or src[4] == player.faction) then
             if not bosses[src[1]] then bosses[src[1]], order[#order + 1] = {}, src[1] end
             tinsert(bosses[src[1]], id)
         end
@@ -1490,6 +1494,9 @@ end
 local function OpenTracker()
     if not tracker then
         tracker = NewWindow("RoleLootDungeonFrame", "RoleLoot dungeon run", 520, 320)
+        -- (not closed by Escape, pressed all the time in a dungeon, nor a window others open beside)
+        tremove(UISpecialFrames)
+        tremove(windows)
         tracker:SetFrameStrata("MEDIUM") -- (stays open while you play: below bags and dialogs)
         tracker:SetPoint("RIGHT", -60, 0)
         tracker.stats = tracker:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1535,7 +1542,8 @@ end
 
 -- At a vendor, a button sells the gear in your bags that RoleLoot says GREED or
 -- PASS for in every role you play (dungeons, outside, each fighting style), once
--- you confirm. Not epics, and 12 at most: the vendor's Buyback tab holds 12.
+-- you confirm. Only green and blue gear (profession tools are white) and no fishing
+-- poles, 12 at most: the vendor's Buyback tab holds 12.
 local UseBagItem = (C_Container and C_Container.UseContainerItem) or UseContainerItem
 local BagSlots = (C_Container and C_Container.GetContainerNumSlots) or GetContainerNumSlots
 local BUYBACK = 12
@@ -1560,7 +1568,9 @@ local function SellList()
             local link = #list < BUYBACK and GetBagLink(bag, slot)
             local _, _, quality, _, _, _, _, _, _, _, price = GetInfo(link or 0)
             -- (not what the AH pays more for: the BiS list's AH mark)
-            if link and (quality or 9) <= 3 and (price or 0) > 0 and select(2, SaleValue(link)) ~= "AH" and not Keep(link) then
+            local _, _, _, _, _, classID, subclassID = GetInstant(link or 0)
+            if link and (quality == 2 or quality == 3) and not (classID == 2 and subclassID == 20) and (price or 0) > 0
+                and select(2, SaleValue(link)) ~= "AH" and not Keep(link) then
                 list[#list + 1] = { bag = bag, slot = slot, link = link }
                 total = total + price
             end
