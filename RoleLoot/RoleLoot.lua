@@ -889,12 +889,12 @@ local function Row(win, i)
     row.icon:SetPoint("LEFT", 4, 0)
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.name:SetPoint("LEFT", 24, 0)
-    row.name:SetWidth(210)
+    row.name:SetWidth(win.nameWidth or 210)
     row.name:SetJustifyH("LEFT")
     row.name:SetWordWrap(false)
     row.info = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.info:SetPoint("RIGHT", -4, 0)
-    row.info:SetWidth(row:GetWidth() - 240)
+    row.info:SetWidth(row:GetWidth() - (win.nameWidth or 210) - 30)
     row.info:SetJustifyH("RIGHT")
     row.info:SetWordWrap(false)
     row:SetScript("OnEnter", function()
@@ -1509,41 +1509,60 @@ BuildTracker = function()
         end)
         for _, e in ipairs(items) do
             n = n + 1
-            Put(tracker, n, e.link, e.link, COLOR[e.verdict] .. e.verdict .. "|r |cffaaaaaa" .. e.reason .. "|r",
-                select(5, GetInstant(e.link)))
+            -- (the reason is on the item's tooltip)
+            Put(tracker, n, e.link, e.link, COLOR[e.verdict] .. e.verdict .. "|r", select(5, GetInstant(e.link)))
         end
     end
     EndRows(tracker, n)
     tracker.hint:SetText(order[1] and (db.run.boss and bosses[db.run.boss] and "Drops of " .. db.run.boss
-        .. ". Target another boss for its drops." or "Target a boss to see only its drops.")
+        or "All bosses: target one for its drops")
         or "No drops listed for " .. db.run.zone .. ".")
 end
 
+-- A small see-through overlay, not a window: no Escape, not in `windows`.
 OpenTracker = function()
     if not tracker then
-        tracker = NewWindow("RoleLootDungeonFrame", "RoleLoot dungeon run", 520, 320)
-        -- (not closed by Escape, pressed all the time in a dungeon, nor a window others open beside)
-        tremove(UISpecialFrames)
-        tremove(windows)
-        tracker:SetFrameStrata("MEDIUM") -- (stays open while you play: below bags and dialogs)
-        local pos = db.trackerPos
-        if pos then tracker:SetPoint(pos[1], UIParent, pos[2], pos[3], pos[4]) else tracker:SetPoint("RIGHT", -60, 0) end
+        tracker = CreateFrame("Frame", "RoleLootDungeonFrame", UIParent)
+        tracker:SetSize(300, 230)
+        tracker:SetFrameStrata("MEDIUM") -- (stays up while you play: below bags and dialogs)
+        tracker:SetClampedToScreen(true)
+        tracker:SetMovable(true)
+        tracker:EnableMouse(true)
+        tracker:RegisterForDrag("LeftButton")
+        tracker:SetScript("OnDragStart", tracker.StartMoving)
         tracker:SetScript("OnDragStop", function(f)
             f:StopMovingOrSizing()
             local point, _, relative, x, y = f:GetPoint()
             db.trackerPos = { point, relative, x, y }
         end)
-        tracker.stats = tracker:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        tracker.stats:SetPoint("TOPLEFT", 14, -36)
-        tracker.hint = tracker:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-        tracker.hint:SetPoint("TOPLEFT", 14, -58)
-        Button(tracker, "New run", 80, 426, -31, function()
+        local pos = db.trackerPos
+        if pos then tracker:SetPoint(pos[1], UIParent, pos[2], pos[3], pos[4]) else tracker:SetPoint("RIGHT", -60, 0) end
+        local bg = tracker:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints()
+        bg:SetColorTexture(0, 0, 0, 0.55)
+        local title = tracker:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        title:SetPoint("TOPLEFT", 8, -8)
+        title:SetText("RoleLoot dungeon run")
+        local close = CreateFrame("Button", nil, tracker, "UIPanelCloseButton")
+        close:SetSize(24, 24)
+        close:SetPoint("TOPRIGHT", 2, 2)
+        local new = Button(tracker, "New run", 64, 210, -3, function()
             if InDungeon() then StartRun() return end
             if db.run then print("|cff20ff20RoleLoot|r run done: " .. Summary()) end -- (none: opened with Move)
             db.run = nil
             tracker:Hide()
         end)
-        List(tracker, -76)
+        new:SetHeight(18)
+        tracker.stats = tracker:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        tracker.stats:SetPoint("TOPLEFT", 8, -26)
+        tracker.stats:SetWidth(284)
+        tracker.stats:SetJustifyH("LEFT")
+        tracker.hint = tracker:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        tracker.hint:SetPoint("TOPLEFT", 8, -52)
+        tracker.hint:SetWidth(284)
+        tracker.hint:SetJustifyH("LEFT")
+        tracker.nameWidth = 170
+        List(tracker, -66)
         local wait = 0
         tracker:SetScript("OnUpdate", function(_, elapsed) -- (the clock, once a second)
             wait = wait - elapsed

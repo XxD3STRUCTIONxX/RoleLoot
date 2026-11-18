@@ -672,7 +672,7 @@ local function Heads()
     for _, r in ipairs(RunRows()) do if r:find("Boss ", 1, true) and not r:find("Hitem", 1, true) then n = n + 1 end end
     return n
 end
-check(Heads() > 5 and run.hint.text == "Target a boss to see only its drops.", "no boss targeted: every boss's drops")
+check(Heads() > 5 and run.hint.text == "All bosses: target one for its drops", "no boss targeted: every boss's drops")
 T.target = { name = "Boss 1002" } Fire("PLAYER_TARGET_CHANGED")
 local rows = RunRows()
 check(#rows == 2 and rows[1]:find("Boss 1002", 1, true) and rows[2]:find("Strong Mail Chest", 1, true)
